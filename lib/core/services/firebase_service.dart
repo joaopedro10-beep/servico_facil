@@ -107,4 +107,5 @@ class FirebaseService extends GetxService {
 
   Future<T> runTransaction<T>(Future<T> Function(Transaction tx) ops) =>
       firestore.runTransaction(ops);
+
 }

@@ -15,5 +15,6 @@ class InitialBinding extends Bindings {
     Get.lazyPut<AuthDatasource>(() => AuthDatasource(), fenix: true);
     Get.lazyPut<FirestoreDatasource>(() => FirestoreDatasource(), fenix: true);
   }
+
 }
 
