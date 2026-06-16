@@ -115,4 +115,5 @@ class StorageExceptionMapper {
       default: return const StorageFailure('Erro ao fazer upload. Tente novamente.');
     }
   }
+
 }

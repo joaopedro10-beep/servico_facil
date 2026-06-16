@@ -36,4 +36,5 @@ class AppFormatters {
       default: return status;
     }
   }
+
 }

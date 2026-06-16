@@ -51,4 +51,5 @@ class Validators {
     if (price == null || price <= 0) return 'Preço inválido';
     return null;
   }
+
 }
