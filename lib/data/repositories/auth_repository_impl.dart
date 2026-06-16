@@ -155,4 +155,5 @@ class AuthRepositoryImpl {
 
   User? get currentUser => _authDs.currentUser;
   Stream<User?> get authStateChanges => _authDs.authStateChanges;
+
 }
