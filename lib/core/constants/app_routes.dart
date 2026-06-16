@@ -34,4 +34,5 @@ class AppRoutes {
   static const settings = '/settings';
   static const report = '/report';
   static const safetyTips = '/safety-tips';
+
 }

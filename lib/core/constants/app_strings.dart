@@ -45,4 +45,5 @@ class AppStrings {
     'Pedreiro',
     'TI / Suporte',
   ];
+
 }
