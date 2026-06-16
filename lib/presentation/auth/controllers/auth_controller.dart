@@ -299,6 +299,7 @@ class AuthController extends GetxController {
       passwordVisible.value = !passwordVisible.value;
   void toggleConfirmPasswordVisibility() =>
       confirmPasswordVisible.value = !confirmPasswordVisible.value;
+
 }
 
 // Alias usado pela VerifyEmailScreen
