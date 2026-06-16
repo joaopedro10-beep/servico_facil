@@ -1,0 +1,79 @@
+name: servico_facil
+description: Conecta clientes com prestadores de serviço autônomo.
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # --- Gerenciamento de estado e navegação ---
+  get: ^4.6.6
+
+  # --- Firebase ---
+  firebase_core: ^2.27.0
+  firebase_auth: ^4.17.0
+  cloud_firestore: ^4.15.0
+  firebase_messaging: ^14.7.19
+  google_sign_in: ^6.2.1
+
+  # --- Armazenamento local seguro ---
+  flutter_secure_storage: ^9.0.0
+  shared_preferences: ^2.2.2
+
+  # --- Imagens ---
+  cached_network_image: ^3.3.1
+  image_picker: ^1.0.7
+
+  # --- Geolocalização ---
+  geolocator: ^11.0.0
+  geocoding: ^3.0.0
+
+  # --- UI ---
+  shimmer: ^3.0.0
+  lottie: ^3.1.0
+  fl_chart: ^0.67.0
+  intl: ^0.19.0
+
+  # --- Notificações locais ---
+  flutter_local_notifications: ^17.1.2
+
+  # --- Utilitários ---
+  uuid: ^4.3.3
+  equatable: ^2.0.5
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+#  flutter_launcher_icons: ^0.13.1
+#  flutter_native_splash: ^2.4.0
+
+#flutter_launcher_icons:
+#  android: true
+#  ios: true
+#  image_path: "assets/images/logo.png"
+#  min_sdk_android: 21
+#
+#flutter_native_splash:
+#  color: "#1D9E75"
+#  image: assets/images/logo.png
+#  android: true
+#  ios: true
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/
+    - assets/animations/
+#  fonts:
+#    - family: Poppins
+#      fonts:
+#        - asset: assets/fonts/Poppins-Regular.ttf
+#        - asset: assets/fonts/Poppins-Medium.ttf
+#          weight: 500
+#        - asset: assets/fonts/Poppins-SemiBold.ttf
+#          weight: 600
