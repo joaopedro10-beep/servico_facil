@@ -205,4 +205,5 @@ class _SectionTitle extends StatelessWidget {
           fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.textPrimary,
         ));
   }
+
 }
