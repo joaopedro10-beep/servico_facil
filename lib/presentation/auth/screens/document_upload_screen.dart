@@ -236,4 +236,5 @@ class _TipRow extends StatelessWidget {
           fontSize: 13, color: AppColors.textSecondary)),
     ]);
   }
+
 }
