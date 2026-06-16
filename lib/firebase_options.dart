@@ -85,4 +85,5 @@ class DefaultFirebaseOptions {
     storageBucket: 'servico-facil-8ff18.firebasestorage.app',
     measurementId: 'G-3ZEEPV49V8',
   );
+
 }
