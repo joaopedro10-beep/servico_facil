@@ -150,4 +150,5 @@ class AuthDatasource {
 
   /// Stream de estado de autenticação.
   Stream<User?> get authStateChanges => _fb.authStateChanges;
+
 }
