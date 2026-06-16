@@ -55,4 +55,5 @@ class ReviewModel extends Equatable {
 
   @override
   List<Object?> get props => [id, orderId, authorId, targetId, rating];
+
 }

@@ -90,4 +90,5 @@ class OrderModel extends Equatable {
 
   @override
   List<Object?> get props => [id, userId, workerId, status, createdAt];
+
 }

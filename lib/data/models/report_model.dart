@@ -61,4 +61,5 @@ class ReportModel extends Equatable {
 
   @override
   List<Object?> get props => [id, reporterId, reportedId, reason, createdAt];
+
 }

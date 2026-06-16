@@ -103,4 +103,5 @@ class UserAddress extends Equatable {
 
   @override
   List<Object?> get props => [street, city, state, lat, lng];
+
 }

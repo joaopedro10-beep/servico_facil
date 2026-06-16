@@ -143,4 +143,5 @@ class WorkerModel extends Equatable {
 
   @override
   List<Object?> get props => [id, name, email, isVerified, isAvailable, rating, verificationStatus];
+
 }
