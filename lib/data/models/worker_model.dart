@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:equatable/equatable.dart';
+import 'user_address.dart';
 
 enum VerificationStatus { pending, approved, rejected }
 
@@ -11,8 +12,7 @@ class WorkerModel extends Equatable {
   final String? photoUrl;
   final List<String> categories;
   final String description;
-  final String city;
-  final String neighborhood;
+  final UserAddress address;
   final double pricePerHour;
   final double rating;
   final int totalReviews;
@@ -25,8 +25,6 @@ class WorkerModel extends Equatable {
   final DateTime createdAt;
   final String? fcmToken;
   // Localização geográfica — opcional para não quebrar cadastros antigos
-  final double lat;
-  final double lng;
 
   const WorkerModel({
     required this.id,
@@ -36,8 +34,7 @@ class WorkerModel extends Equatable {
     this.photoUrl,
     required this.categories,
     required this.description,
-    required this.city,
-    required this.neighborhood,
+    required this.address,
     required this.pricePerHour,
     this.rating = 0.0,
     this.totalReviews = 0,
@@ -49,9 +46,17 @@ class WorkerModel extends Equatable {
     this.portfolioUrls = const [],
     required this.createdAt,
     this.fcmToken,
-    this.lat = 0.0,
-    this.lng = 0.0,
   });
+
+  String get city => address.city;
+  String get neighborhood => address.neighborhood;
+  String get cep => address.cep;
+  String get street => address.street;
+  String get number => address.number;
+  String get complement => address.complement;
+  String get state => address.state;
+  String get lat => address.lat.toString();
+  String get lng => address.lng.toString();
 
   factory WorkerModel.fromMap(Map<String, dynamic> map, String docId) {
     return WorkerModel(
@@ -62,8 +67,9 @@ class WorkerModel extends Equatable {
       photoUrl: map['photoUrl'],
       categories: List<String>.from(map['categories'] ?? []),
       description: map['description'] ?? '',
-      city: map['city'] ?? '',
-      neighborhood: map['neighborhood'] ?? '',
+      address: UserAddress.fromMap(
+        map['address'] ?? {},
+      ),
       pricePerHour: (map['pricePerHour'] ?? 0.0).toDouble(),
       rating: (map['rating'] ?? 0.0).toDouble(),
       totalReviews: map['totalReviews'] ?? 0,
@@ -78,8 +84,6 @@ class WorkerModel extends Equatable {
       portfolioUrls: List<String>.from(map['portfolioUrls'] ?? []),
       createdAt: (map['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       fcmToken: map['fcmToken'],
-      lat: (map['lat'] ?? 0.0).toDouble(),
-      lng: (map['lng'] ?? 0.0).toDouble(),
     );
   }
 
@@ -90,8 +94,6 @@ class WorkerModel extends Equatable {
     'photoUrl': photoUrl,
     'categories': categories,
     'description': description,
-    'city': city,
-    'neighborhood': neighborhood,
     'pricePerHour': pricePerHour,
     'rating': rating,
     'totalReviews': totalReviews,
@@ -103,8 +105,7 @@ class WorkerModel extends Equatable {
     'portfolioUrls': portfolioUrls,
     'createdAt': Timestamp.fromDate(createdAt),
     'fcmToken': fcmToken,
-    'lat': lat,
-    'lng': lng,
+    'address': address.toMap(),
   };
 
   WorkerModel copyWith({
@@ -113,8 +114,7 @@ class WorkerModel extends Equatable {
     String? photoUrl,
     List<String>? categories,
     String? description,
-    String? city,
-    String? neighborhood,
+    UserAddress? address,
     double? pricePerHour,
     double? rating,
     int? totalReviews,
@@ -125,8 +125,6 @@ class WorkerModel extends Equatable {
     String? documentUrl,
     List<String>? portfolioUrls,
     String? fcmToken,
-    double? lat,
-    double? lng,
   }) {
     return WorkerModel(
       id: id,
@@ -136,8 +134,7 @@ class WorkerModel extends Equatable {
       photoUrl: photoUrl ?? this.photoUrl,
       categories: categories ?? this.categories,
       description: description ?? this.description,
-      city: city ?? this.city,
-      neighborhood: neighborhood ?? this.neighborhood,
+      address: address ?? this.address,
       pricePerHour: pricePerHour ?? this.pricePerHour,
       rating: rating ?? this.rating,
       totalReviews: totalReviews ?? this.totalReviews,
@@ -149,8 +146,6 @@ class WorkerModel extends Equatable {
       portfolioUrls: portfolioUrls ?? this.portfolioUrls,
       createdAt: createdAt,
       fcmToken: fcmToken ?? this.fcmToken,
-      lat: lat ?? this.lat,
-      lng: lng ?? this.lng,
     );
   }
 
@@ -159,5 +154,5 @@ class WorkerModel extends Equatable {
 
   @override
   List<Object?> get props =>
-      [id, name, email, isVerified, isAvailable, rating, verificationStatus, lat, lng];
+      [id, name, email, isVerified, isAvailable, rating, verificationStatus, address,];
 }

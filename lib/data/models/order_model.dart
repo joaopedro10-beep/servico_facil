@@ -1,6 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:equatable/equatable.dart';
-import 'user_model.dart';
+import 'user_address.dart';
 
 enum OrderStatus { pending, accepted, inProgress, done, cancelled }
 

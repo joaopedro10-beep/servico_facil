@@ -1,6 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:equatable/equatable.dart';
 
+import 'user_address.dart';
+
 class UserModel extends Equatable {
   final String id;
   final String name;
@@ -30,7 +32,8 @@ class UserModel extends Equatable {
       phone: map['phone'] ?? '',
       photoUrl: map['photoUrl'],
       address: UserAddress.fromMap(map['address'] ?? {}),
-      createdAt: (map['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      createdAt:
+      (map['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       fcmToken: map['fcmToken'],
     );
   }
@@ -65,43 +68,14 @@ class UserModel extends Equatable {
   }
 
   @override
-  List<Object?> get props => [id, name, email, phone, photoUrl, address, createdAt, fcmToken];
-}
-
-class UserAddress extends Equatable {
-  final String street;
-  final String city;
-  final String state;
-  final double lat;
-  final double lng;
-
-  const UserAddress({
-    required this.street,
-    required this.city,
-    required this.state,
-    required this.lat,
-    required this.lng,
-  });
-
-  factory UserAddress.fromMap(Map<String, dynamic> map) {
-    return UserAddress(
-      street: map['street'] ?? '',
-      city: map['city'] ?? '',
-      state: map['state'] ?? '',
-      lat: (map['lat'] ?? 0.0).toDouble(),
-      lng: (map['lng'] ?? 0.0).toDouble(),
-    );
-  }
-
-  Map<String, dynamic> toMap() => {
-    'street': street,
-    'city': city,
-    'state': state,
-    'lat': lat,
-    'lng': lng,
-  };
-
-  @override
-  List<Object?> get props => [street, city, state, lat, lng];
-
+  List<Object?> get props => [
+    id,
+    name,
+    email,
+    phone,
+    photoUrl,
+    address,
+    createdAt,
+    fcmToken,
+  ];
 }
