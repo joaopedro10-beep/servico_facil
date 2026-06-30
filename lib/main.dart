@@ -9,6 +9,9 @@ import 'core/bindings/initial_binding.dart';
 import 'core/constants/app_routes.dart';
 import 'core/constants/app_strings.dart';
 import 'core/theme/app_theme.dart';
+import 'core/services/firebase_service.dart';
+import 'core/services/notification_service.dart';
+import 'firebase_options.dart';
 
 // ── Auth ─────────────────────────────────────────────────────────────────────
 import 'presentation/auth/screens/splash_screen.dart';
@@ -64,15 +67,21 @@ import 'presentation/settings/controllers/settings_controller.dart';
 // ── Shared ───────────────────────────────────────────────────────────────────
 import 'presentation/shared/placeholder_screen.dart';
 
-// Descomente após rodar `flutterfire configure`:
-// import 'firebase_options.dart';
-
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   await Firebase.initializeApp(
-    // options: DefaultFirebaseOptions.currentPlatform,
+    options: DefaultFirebaseOptions.currentPlatform,
   );
+
+  // Serviços que dependem de chamadas assíncronas (configuração do
+  // Firestore, permissões de notificação, canal Android, etc.) precisam
+  // ser inicializados ANTES do runApp(), usando Get.putAsync — diferente
+  // de InitialBinding.dependencies(), que é síncrono e não pode aguardar.
+  await Get.putAsync<FirebaseService>(() => FirebaseService().init(),
+      permanent: true);
+  await Get.putAsync<NotificationService>(() => NotificationService().init(),
+      permanent: true);
 
   await SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
