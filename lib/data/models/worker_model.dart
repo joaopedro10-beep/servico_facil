@@ -24,7 +24,11 @@ class WorkerModel extends Equatable {
   final List<String> portfolioUrls;
   final DateTime createdAt;
   final String? fcmToken;
-  // Localização geográfica — opcional para não quebrar cadastros antigos
+
+  /// Sempre 'password'. Trabalhador nunca se cadastra via Google — as
+  /// Firestore Rules rejeitam qualquer tentativa de criar um worker com
+  /// authProvider diferente disso.
+  final String authProvider;
 
   const WorkerModel({
     required this.id,
@@ -46,6 +50,7 @@ class WorkerModel extends Equatable {
     this.portfolioUrls = const [],
     required this.createdAt,
     this.fcmToken,
+    this.authProvider = 'password',
   });
 
   String get city => address.city;
@@ -84,6 +89,7 @@ class WorkerModel extends Equatable {
       portfolioUrls: List<String>.from(map['portfolioUrls'] ?? []),
       createdAt: (map['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       fcmToken: map['fcmToken'],
+      authProvider: map['authProvider'] ?? 'password',
     );
   }
 
@@ -106,6 +112,7 @@ class WorkerModel extends Equatable {
     'createdAt': Timestamp.fromDate(createdAt),
     'fcmToken': fcmToken,
     'address': address.toMap(),
+    'authProvider': authProvider,
   };
 
   WorkerModel copyWith({
@@ -146,6 +153,7 @@ class WorkerModel extends Equatable {
       portfolioUrls: portfolioUrls ?? this.portfolioUrls,
       createdAt: createdAt,
       fcmToken: fcmToken ?? this.fcmToken,
+      authProvider: authProvider,
     );
   }
 
