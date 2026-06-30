@@ -19,6 +19,7 @@ import 'presentation/auth/screens/onboarding_screen.dart';
 import 'presentation/auth/screens/welcome_screen.dart';
 import 'presentation/auth/screens/login_screen.dart';
 import 'presentation/auth/screens/register_client_screen.dart';
+import 'presentation/auth/screens/complete_profile_screen.dart';
 import 'presentation/auth/screens/register_worker_screen.dart';
 import 'presentation/auth/screens/document_upload_screen.dart';
 import 'presentation/auth/screens/verify_email_screen.dart';
@@ -162,6 +163,12 @@ class ServicoFacilApp extends StatelessWidget {
         GetPage(
           name: AppRoutes.registerClient,
           page: () => const RegisterClientScreen(),
+          binding: AuthBinding(),
+          transition: Transition.rightToLeft,
+        ),
+        GetPage(
+          name: AppRoutes.completeProfile,
+          page: () => const CompleteProfileScreen(),
           binding: AuthBinding(),
           transition: Transition.rightToLeft,
         ),
