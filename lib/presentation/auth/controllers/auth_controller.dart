@@ -5,8 +5,8 @@ import 'package:image_picker/image_picker.dart';
 
 import '../../../core/constants/app_routes.dart';
 import '../../../core/errors/app_exceptions.dart';
+import '../../../core/services/cep_service.dart';
 import '../../../data/repositories/auth_repository_impl.dart';
-
 
 class AuthController extends GetxController {
   final AuthRepositoryImpl _repo = Get.find<AuthRepositoryImpl>();
@@ -28,6 +28,15 @@ class AuthController extends GetxController {
   final documentFile = Rxn<File>();
   final documentPicked = false.obs;
 
+  // ─── Endereço (preenchido automaticamente via CEP) ────────────────────────
+  final addressLat = 0.0.obs;
+  final addressLng = 0.0.obs;
+  final addressFound = false.obs;
+  /// Observável real do último resultado de CEP — use este (não os
+  /// TextEditingControllers) dentro de qualquer Obx() que precise reagir
+  /// ao preenchimento automático do endereço.
+  final lastAddress = Rxn<CepResult>();
+
   // Form keys
   final loginFormKey = GlobalKey<FormState>();
   final registerClientFormKey = GlobalKey<FormState>();
@@ -39,8 +48,15 @@ class AuthController extends GetxController {
   final passwordCtrl = TextEditingController();
   final confirmPasswordCtrl = TextEditingController();
   final phoneCtrl = TextEditingController();
+
+  // Endereço
+  final cepCtrl = TextEditingController();
+  final streetCtrl = TextEditingController();
   final cityCtrl = TextEditingController();
+  final stateCtrl = TextEditingController();
   final neighborhoodCtrl = TextEditingController();
+  final numberCtrl = TextEditingController();
+
   final descriptionCtrl = TextEditingController();
   final priceCtrl = TextEditingController();
   final resetEmailCtrl = TextEditingController();
@@ -56,7 +72,8 @@ class AuthController extends GetxController {
   void onClose() {
     for (final c in [
       nameCtrl, emailCtrl, passwordCtrl, confirmPasswordCtrl,
-      phoneCtrl, cityCtrl, neighborhoodCtrl, descriptionCtrl,
+      phoneCtrl, cepCtrl, streetCtrl, cityCtrl, stateCtrl,
+      neighborhoodCtrl, numberCtrl, descriptionCtrl,
       priceCtrl, resetEmailCtrl,
     ]) { c.dispose(); }
     super.onClose();
@@ -67,7 +84,6 @@ class AuthController extends GetxController {
     final user = _repo.currentUser;
     if (user == null) return;
 
-    // Email verificado?
     if (!user.emailVerified) {
       Get.offAllNamed(AppRoutes.verifyEmail);
       return;
@@ -84,6 +100,32 @@ class AuthController extends GetxController {
   // ─── Seleção de tipo ──────────────────────────────────────────────────────
   void selectUserType(String type) {
     selectedUserType.value = type;
+  }
+
+  // ─── Endereço via CEP ─────────────────────────────────────────────────────
+  /// Chamado pelo CepInputField quando o ViaCEP retorna um endereço válido.
+  /// Preenche automaticamente rua, bairro, cidade e estado.
+  void onAddressFound(CepResult result) {
+    streetCtrl.text = result.street;
+    neighborhoodCtrl.text = result.neighborhood;
+    cityCtrl.text = result.city;
+    stateCtrl.text = result.state;
+    addressLat.value = result.lat;
+    addressLng.value = result.lng;
+    addressFound.value = true;
+    lastAddress.value = result;
+  }
+
+  /// Limpa o endereço preenchido (caso o usuário troque o CEP).
+  void clearAddress() {
+    streetCtrl.clear();
+    neighborhoodCtrl.clear();
+    cityCtrl.clear();
+    stateCtrl.clear();
+    addressLat.value = 0;
+    addressLng.value = 0;
+    addressFound.value = false;
+    lastAddress.value = null;
   }
 
   // ─── Login e-mail/senha ───────────────────────────────────────────────────
@@ -127,7 +169,14 @@ class AuthController extends GetxController {
         email: emailCtrl.text.trim(),
         password: passwordCtrl.text,
         phone: phoneCtrl.text.trim(),
+        cep: cepCtrl.text.trim(),
+        street: streetCtrl.text.trim(),
+        number: numberCtrl.text.trim(),
+        neighborhood: neighborhoodCtrl.text.trim(),
         city: cityCtrl.text.trim(),
+        state: stateCtrl.text.trim(),
+        lat: addressLat.value,
+        lng: addressLng.value,
       );
       Get.offAllNamed(AppRoutes.verifyEmail);
     } on AppException catch (e) {
@@ -142,6 +191,10 @@ class AuthController extends GetxController {
     if (!registerWorkerFormKey.currentState!.validate()) return;
     if (selectedCategories.isEmpty) {
       _showError('Selecione pelo menos uma categoria de serviço.');
+      return;
+    }
+    if (!addressFound.value) {
+      _showError('Informe um CEP válido para localizarmos seu endereço.');
       return;
     }
     Get.toNamed(AppRoutes.documentUpload);
@@ -190,8 +243,14 @@ class AuthController extends GetxController {
         categories: selectedCategories.toList(),
         description: descriptionCtrl.text.trim(),
         pricePerHour: price,
-        city: cityCtrl.text.trim(),
+        cep: cepCtrl.text.trim(),
+        street: streetCtrl.text.trim(),
+        number: numberCtrl.text.trim(),
         neighborhood: neighborhoodCtrl.text.trim(),
+        city: cityCtrl.text.trim(),
+        state: stateCtrl.text.trim(),
+        lat: addressLat.value,
+        lng: addressLng.value,
         documentLocalPath: documentFile.value?.path ?? '',
       );
       Get.offAllNamed(AppRoutes.verifyEmail);
@@ -256,6 +315,9 @@ class AuthController extends GetxController {
     }
   }
 
+  /// Alias usado pela VerifyEmailScreen.
+  Future<void> checkEmailAndProceed() => checkVerificationAndProceed();
+
   // ─── Redefinição de senha ─────────────────────────────────────────────────
   Future<void> sendPasswordReset() async {
     if (resetEmailCtrl.text.trim().isEmpty) {
@@ -299,9 +361,4 @@ class AuthController extends GetxController {
       passwordVisible.value = !passwordVisible.value;
   void toggleConfirmPasswordVisibility() =>
       confirmPasswordVisible.value = !confirmPasswordVisible.value;
-
-
-
-  // Alias usado pela VerifyEmailScreen
-  Future<void> checkEmailAndProceed() => checkVerificationAndProceed();
 }
