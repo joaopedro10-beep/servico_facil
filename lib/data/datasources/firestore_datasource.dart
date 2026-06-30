@@ -127,6 +127,8 @@ class FirestoreDatasource {
         price: order.price,
         createdAt: DateTime.now(),
         updatedAt: DateTime.now(),
+        clientName: order.clientName,
+        workerName: order.workerName,
       );
       await ref.set(newOrder.toMap());
       return newOrder;
