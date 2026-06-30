@@ -104,7 +104,7 @@ class WorkerProfileController extends GetxController {
     if (w == null) return;
     descriptionCtrl.text = w.description;
     priceCtrl.text = w.pricePerHour.toStringAsFixed(2);
-    neighborhoodCtrl.text = w.neighborhood;
+    neighborhoodCtrl.text = w.address.neighborhood;
     isAvailable.value = w.isAvailable;
     selectedCategories.assignAll(w.categories);
     newPortfolioFiles.clear();
@@ -216,10 +216,14 @@ class WorkerProfileController extends GetxController {
         ...uploadedUrls,
       ];
 
+      final newAddress = w.address.copyWith(
+        neighborhood: neighborhoodCtrl.text.trim(),
+      );
+
       final updates = <String, dynamic>{
         'description': descriptionCtrl.text.trim(),
         'pricePerHour': double.parse(priceCtrl.text.replaceAll(',', '.')),
-        'neighborhood': neighborhoodCtrl.text.trim(),
+        'address': newAddress.toMap(),
         'isAvailable': isAvailable.value,
         'categories': selectedCategories.toList(),
         'portfolioUrls': finalPortfolio,
@@ -230,7 +234,7 @@ class WorkerProfileController extends GetxController {
       worker.value = w.copyWith(
         description: updates['description'] as String,
         pricePerHour: updates['pricePerHour'] as double,
-        neighborhood: updates['neighborhood'] as String,
+        address: newAddress,
         isAvailable: updates['isAvailable'] as bool,
         categories: List<String>.from(updates['categories'] as List),
         portfolioUrls: List<String>.from(updates['portfolioUrls'] as List),
