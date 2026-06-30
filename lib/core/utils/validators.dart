@@ -52,4 +52,35 @@ class Validators {
     return null;
   }
 
+  /// Valida CPF com checagem real dos dígitos verificadores —
+  /// não aceita apenas "11 números", rejeita CPFs falsos como 111.111.111-11.
+  static String? cpf(String? value) {
+    if (value == null || value.isEmpty) return 'Informe seu CPF';
+    final digits = value.replaceAll(RegExp(r'\D'), '');
+
+    if (digits.length != 11) return 'CPF deve ter 11 números';
+    if (RegExp(r'^(\d)\1{10}$').hasMatch(digits)) return 'CPF inválido';
+
+    final numbers = digits.split('').map(int.parse).toList();
+
+    int calcDigit(List<int> base) {
+      int sum = 0;
+      int weight = base.length + 1;
+      for (final n in base) {
+        sum += n * weight;
+        weight--;
+      }
+      final rest = sum % 11;
+      return rest < 2 ? 0 : 11 - rest;
+    }
+
+    final d1 = calcDigit(numbers.sublist(0, 9));
+    if (d1 != numbers[9]) return 'CPF inválido';
+
+    final d2 = calcDigit(numbers.sublist(0, 10));
+    if (d2 != numbers[10]) return 'CPF inválido';
+
+    return null;
+  }
+
 }
