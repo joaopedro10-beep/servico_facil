@@ -7,6 +7,7 @@ class AppRoutes {
   static const welcome = '/welcome';
   static const login = '/login';
   static const registerClient = '/register-client';
+  static const completeProfile = '/complete-profile';
   static const registerWorker = '/register-worker';
   static const documentUpload = '/document-upload';
   static const verifyEmail = '/verify-email';
