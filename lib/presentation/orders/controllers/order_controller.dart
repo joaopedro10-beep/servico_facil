@@ -11,8 +11,8 @@ import '../../../core/services/cloudinary_service.dart';
 import '../../../core/services/firebase_service.dart';
 import '../../../data/datasources/firestore_datasource.dart';
 import '../../../data/models/order_model.dart';
-import '../../../data/models/user_model.dart';
 import '../../../data/models/worker_model.dart';
+import '../../../data/models/user_address.dart';
 
 class OrderController extends GetxController {
   final FirestoreDatasource _ds = Get.find<FirestoreDatasource>();
@@ -108,11 +108,13 @@ class OrderController extends GetxController {
           desiredAccuracy: LocationAccuracy.medium);
 
       sheetAddress.value = UserAddress(
+        cep: '',
         street: 'Localização atual',
         city: '',
         state: '',
         lat: pos.latitude,
-        lng: pos.longitude,
+        lng: pos.longitude, number: '',
+        neighborhood: '',
       );
       addressCtrl.text = 'Localização atual (${pos.latitude.toStringAsFixed(4)}, ${pos.longitude.toStringAsFixed(4)})';
     } catch (_) {
@@ -175,6 +177,9 @@ class OrderController extends GetxController {
             state: '',
             lat: 0,
             lng: 0,
+            cep: '',
+            number: '',
+            neighborhood: '',
           );
 
       final order = await _ds.createOrder(OrderModel(
