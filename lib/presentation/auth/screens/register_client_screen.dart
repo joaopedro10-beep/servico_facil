@@ -4,9 +4,10 @@ import 'package:get/get.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/utils/validators.dart';
 import '../../../widgets/buttons/primary_button.dart';
-import '../../../widgets/inputs/app_text_field.dart';
-import '../controllers/auth_controller.dart';
 import '../../../widgets/dialogs/error_banner.dart';
+import '../../../widgets/inputs/app_text_field.dart';
+import '../../../widgets/inputs/cep_input_field.dart';
+import '../controllers/auth_controller.dart';
 
 class RegisterClientScreen extends StatelessWidget {
   const RegisterClientScreen({super.key});
@@ -57,17 +58,50 @@ class RegisterClientScreen extends StatelessWidget {
                   prefixIcon: const Icon(Icons.phone_outlined),
                   validator: Validators.phone,
                 ),
+                const SizedBox(height: 24),
+
+                // ── Endereço via CEP ─────────────────────────────────────────
+                const Text('Endereço',
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 4),
+                const Text(
+                  'Informe seu CEP e localizamos o endereço automaticamente.',
+                  style: TextStyle(color: AppColors.textSecondary, fontSize: 12.5),
+                ),
+                const SizedBox(height: 12),
+
+                CepInputField(
+                  controller: ctrl.cepCtrl,
+                  onAddressFound: ctrl.onAddressFound,
+                  validator: (v) {
+                    final digits = (v ?? '').replaceAll(RegExp(r'\D'), '');
+                    if (digits.length != 8) return 'Informe um CEP válido';
+                    return null;
+                  },
+                ),
+
+                Obx(() {
+                  final addr = ctrl.lastAddress.value;
+                  return AddressPreviewCard(
+                    street: addr?.street ?? '',
+                    neighborhood: addr?.neighborhood ?? '',
+                    city: addr?.city ?? '',
+                    state: addr?.state ?? '',
+                  );
+                }),
                 const SizedBox(height: 14),
 
                 AppTextField(
-                  controller: ctrl.cityCtrl,
-                  label: 'Cidade',
-                  prefixIcon: const Icon(Icons.location_city_outlined),
-                  validator: (v) => Validators.required(v, field: 'Cidade'),
+                  controller: ctrl.numberCtrl,
+                  label: 'Número',
+                  hint: 'Ex: 123',
+                  keyboardType: TextInputType.number,
+                  prefixIcon: const Icon(Icons.numbers_outlined),
+                  validator: (v) => Validators.required(v, field: 'Número'),
                 ),
-                const SizedBox(height: 14),
+                const SizedBox(height: 24),
 
-                // Senha com força
+                // ── Senha ────────────────────────────────────────────────────
                 Obx(() => PasswordStrengthField(
                   controller: ctrl.passwordCtrl,
                   label: 'Senha',
@@ -121,5 +155,4 @@ class RegisterClientScreen extends StatelessWidget {
       ),
     );
   }
-
 }

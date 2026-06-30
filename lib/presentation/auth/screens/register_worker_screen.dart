@@ -5,9 +5,10 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_strings.dart';
 import '../../../core/utils/validators.dart';
 import '../../../widgets/buttons/primary_button.dart';
-import '../../../widgets/inputs/app_text_field.dart';
-import '../controllers/auth_controller.dart';
 import '../../../widgets/dialogs/error_banner.dart';
+import '../../../widgets/inputs/app_text_field.dart';
+import '../../../widgets/inputs/cep_input_field.dart';
+import '../controllers/auth_controller.dart';
 
 // Ícones por categoria
 const _categoryIcons = {
@@ -73,17 +74,45 @@ class RegisterWorkerScreen extends StatelessWidget {
                   prefixIcon: const Icon(Icons.phone_outlined),
                   validator: Validators.phone,
                 ),
-                const SizedBox(height: 14),
-                AppTextField(
-                  controller: ctrl.cityCtrl,
-                  label: 'Cidade',
-                  prefixIcon: const Icon(Icons.location_city_outlined),
-                  validator: (v) => Validators.required(v, field: 'Cidade'),
+                const SizedBox(height: 28),
+
+                // ── Endereço via CEP ─────────────────────────────────────────
+                _SectionTitle('Área de atuação'),
+                const SizedBox(height: 4),
+                const Text(
+                  'Informe o CEP da sua região de atendimento e localizamos automaticamente.',
+                  style: TextStyle(color: AppColors.textSecondary, fontSize: 12.5),
                 ),
+                const SizedBox(height: 12),
+
+                CepInputField(
+                  controller: ctrl.cepCtrl,
+                  onAddressFound: ctrl.onAddressFound,
+                  validator: (v) {
+                    final digits = (v ?? '').replaceAll(RegExp(r'\D'), '');
+                    if (digits.length != 8) return 'Informe um CEP válido';
+                    return null;
+                  },
+                ),
+
+                Obx(() {
+                  final addr = ctrl.lastAddress.value;
+                  return AddressPreviewCard(
+                    street: addr?.street ?? '',
+                    neighborhood: addr?.neighborhood ?? '',
+                    city: addr?.city ?? '',
+                    state: addr?.state ?? '',
+                  );
+                }),
                 const SizedBox(height: 14),
+
+                // Bairro continua editável: o prestador pode atuar em um
+                // bairro diferente do CEP informado (ex: CEP da casa,
+                // atuação em bairro vizinho).
                 AppTextField(
                   controller: ctrl.neighborhoodCtrl,
                   label: 'Bairro de atuação',
+                  hint: 'Pode ajustar se atender outra região',
                   prefixIcon: const Icon(Icons.map_outlined),
                   validator: (v) => Validators.required(v, field: 'Bairro'),
                 ),
@@ -173,7 +202,7 @@ class RegisterWorkerScreen extends StatelessWidget {
 
                 Obx(() => ctrl.errorMessage.value.isEmpty
                     ? const SizedBox.shrink()
-                    :ErrorBanner(ctrl.errorMessage.value)),
+                    : ErrorBanner(ctrl.errorMessage.value)),
 
                 Obx(() => PrimaryButton(
                   label: 'Próximo: Enviar documento',
@@ -205,5 +234,4 @@ class _SectionTitle extends StatelessWidget {
           fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.textPrimary,
         ));
   }
-
 }
