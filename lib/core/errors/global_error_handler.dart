@@ -33,11 +33,11 @@ class GlobalErrorHandler {
       Get.toNamed(AppRoutes.verifyEmail);
       return;
     } else if (error is ValidationException) {
-      message = error.message ?? 'Dados inválidos.';
+      message = error.message;
     } else if (error is ServerException) {
-      message = error.message ?? 'Erro no servidor. Tente novamente.';
+      message = error.message;
     } else if (error is AuthException) {
-      message = error.message ?? 'Erro de autenticação.';
+      message = error.message;
     } else {
       message = 'Algo deu errado. Tente novamente.';
     }
