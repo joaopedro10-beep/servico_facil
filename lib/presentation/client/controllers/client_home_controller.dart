@@ -9,6 +9,7 @@ import '../../../core/services/firebase_service.dart';
 import '../../../data/datasources/firestore_datasource.dart';
 import '../../../data/models/user_model.dart';
 import '../../../data/models/worker_model.dart';
+import '../../../data/models/user_address.dart';
 
 // ─── Modelo de filtros ────────────────────────────────────────────────────────
 
@@ -99,7 +100,7 @@ class ClientHomeController extends GetxController {
     // 4. Distância (só se tiver localização)
     if (locationGranted.value) {
       list = list.where((w) {
-        final d = _distanceKm(userLat.value, userLng.value, w.lat, w.lng);
+        final d = _distanceKm(userLat.value, userLng.value, w.address.lat, w.address.lng);
         return d <= f.maxDistanceKm;
       }).toList();
     }
@@ -115,8 +116,8 @@ class ClientHomeController extends GetxController {
       case SortBy.distance:
         if (locationGranted.value) {
           list.sort((a, b) {
-            final da = _distanceKm(userLat.value, userLng.value, a.lat, a.lng);
-            final db = _distanceKm(userLat.value, userLng.value, b.lat, b.lng);
+            final da = _distanceKm(userLat.value, userLng.value, a.address.lat, a.address.lng);
+            final db = _distanceKm(userLat.value, userLng.value, b.address.lat, b.address.lng);
             return da.compareTo(db);
           });
         }
@@ -204,7 +205,7 @@ class ClientHomeController extends GetxController {
 
   double distanceToWorker(WorkerModel w) {
     if (!locationGranted.value) return 0;
-    return _distanceKm(userLat.value, userLng.value, w.lat, w.lng);
+    return _distanceKm(userLat.value, userLng.value, w.address.lat, w.address.lng);
   }
 
   /// Fórmula de Haversine — retorna distância em km
