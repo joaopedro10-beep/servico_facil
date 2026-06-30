@@ -90,11 +90,7 @@ class AuthController extends GetxController {
     }
 
     final type = await _repo.getCachedUserType();
-    if (type == 'worker') {
-      Get.offAllNamed(AppRoutes.workerHome);
-    } else {
-      Get.offAllNamed(AppRoutes.clientHome);
-    }
+    await _navigateAfterLogin(type ?? 'client');
   }
 
   // ─── Seleção de tipo ──────────────────────────────────────────────────────
@@ -136,7 +132,7 @@ class AuthController extends GetxController {
       final type = await _repo.loginWithEmail(
         email: emailCtrl.text, password: passwordCtrl.text,
       );
-      _navigateAfterLogin(type);
+      await _navigateAfterLogin(type);
     } on EmailNotVerifiedException {
       Get.offAllNamed(AppRoutes.verifyEmail);
     } on AppException catch (e) {
@@ -151,7 +147,7 @@ class AuthController extends GetxController {
     _setLoading(true);
     try {
       final type = await _repo.loginWithGoogle();
-      _navigateAfterLogin(type);
+      await _navigateAfterLogin(type);
     } on AppException catch (e) {
       _showError(e.message);
     } finally {
@@ -345,9 +341,18 @@ class AuthController extends GetxController {
   }
 
   // ─── Navegação pós-login ──────────────────────────────────────────────────
-  void _navigateAfterLogin(String type) {
+  /// Decide para onde mandar o usuário após login/cadastro. Para clientes,
+  /// verifica antes se o perfil precisa ser completado (caso de quem entrou
+  /// via Google sem CPF/endereço ainda) — sem isso, ele cairia direto na
+  /// Home e só descobriria o bloqueio ao tentar solicitar um serviço.
+  Future<void> _navigateAfterLogin(String type) async {
     if (type == 'worker') {
       Get.offAllNamed(AppRoutes.workerHome);
+      return;
+    }
+    final needsCompletion = await _repo.currentUserNeedsProfileCompletion();
+    if (needsCompletion) {
+      Get.offAllNamed(AppRoutes.completeProfile);
     } else {
       Get.offAllNamed(AppRoutes.clientHome);
     }
