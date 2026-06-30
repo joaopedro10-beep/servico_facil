@@ -4,8 +4,8 @@ import 'package:get/get.dart';
 
 import '../../../core/constants/app_colors.dart';
 import '../../../widgets/buttons/primary_button.dart';
-import '../controllers/auth_controller.dart';
 import '../../../widgets/dialogs/error_banner.dart';
+import '../controllers/auth_controller.dart';
 
 class DocumentUploadScreen extends StatelessWidget {
   const DocumentUploadScreen({super.key});
@@ -236,5 +236,4 @@ class _TipRow extends StatelessWidget {
           fontSize: 13, color: AppColors.textSecondary)),
     ]);
   }
-
 }

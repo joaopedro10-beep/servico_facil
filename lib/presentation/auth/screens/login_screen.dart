@@ -5,9 +5,9 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_routes.dart';
 import '../../../core/utils/validators.dart';
 import '../../../widgets/buttons/primary_button.dart';
+import '../../../widgets/dialogs/error_banner.dart';
 import '../../../widgets/inputs/app_text_field.dart';
 import '../controllers/auth_controller.dart';
-import '../../../widgets/dialogs/error_banner.dart';
 
 class LoginScreen extends StatelessWidget {
   const LoginScreen({super.key});
@@ -167,6 +167,5 @@ class LoginScreen extends StatelessWidget {
       ),
     );
   }
-
 }
 
