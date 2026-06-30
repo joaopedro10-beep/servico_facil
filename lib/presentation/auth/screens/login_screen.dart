@@ -100,7 +100,14 @@ class LoginScreen extends StatelessWidget {
                 ]),
                 const SizedBox(height: 16),
 
-                // Google Sign-In
+                // Google Sign-In — disponível apenas para clientes.
+                // Não há como saber, nesta tela única de login, se quem
+                // está entrando é cliente ou prestador antes da autenticação
+                // acontecer. Por isso a restrição é aplicada em duas camadas
+                // depois do clique: AuthRepositoryImpl.loginWithGoogle()
+                // verifica se já existe um worker com esse uid e bloqueia
+                // com mensagem clara, e as Firestore Rules nunca aceitam um
+                // documento em /workers com authProvider != 'password'.
                 Obx(() => OutlineButton(
                   label: 'Continuar com Google',
                   onPressed: ctrl.isLoading.value ? null : ctrl.loginWithGoogle,
