@@ -94,27 +94,43 @@ class _SplashScreenState extends State<SplashScreen>
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                // Logo com fundo branco e bordas arredondadas
                 Container(
-                  width: 90, height: 90,
+                  width: 110,
+                  height: 110,
                   decoration: BoxDecoration(
                     color: Colors.white,
-                    borderRadius: BorderRadius.circular(24),
+                    borderRadius: BorderRadius.circular(28),
                   ),
-                  child: const Icon(Icons.handyman_rounded,
-                      size: 52, color: AppColors.primary),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(28),
+                    child: Image.asset(
+                      'assets/images/splash_logo.png',
+                      width: 110,
+                      height: 110,
+                      fit: BoxFit.contain,
+                    ),
+                  ),
                 ),
-                const SizedBox(height: 20),
-                const Text('ServiçoFácil',
-                    style: TextStyle(
-                      color: Colors.white, fontSize: 28,
-                      fontWeight: FontWeight.w700, fontFamily: 'Poppins',
-                    )),
+                const SizedBox(height: 24),
+                const Text(
+                  'ServiçoFácil',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 28,
+                    fontWeight: FontWeight.w700,
+                    fontFamily: 'Poppins',
+                  ),
+                ),
                 const SizedBox(height: 8),
-                Text('Conectando pessoas e serviços',
-                    style: TextStyle(
-                      color: Colors.white.withOpacity(0.8),
-                      fontSize: 14, fontFamily: 'Poppins',
-                    )),
+                Text(
+                  'Conectando pessoas e serviços',
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.8),
+                    fontSize: 14,
+                    fontFamily: 'Poppins',
+                  ),
+                ),
               ],
             ),
           ),

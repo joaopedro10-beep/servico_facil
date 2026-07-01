@@ -18,15 +18,15 @@ class WelcomeScreen extends StatelessWidget {
           child: Column(
             children: [
               const Spacer(flex: 2),
-              // Ícone / logo
-              Container(
-                width: 100, height: 100,
-                decoration: BoxDecoration(
-                  color: AppColors.primary.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(28),
+              // Logo do app
+              ClipRRect(
+                borderRadius: BorderRadius.circular(28),
+                child: Image.asset(
+                  'assets/images/splash_logo.png',
+                  width: 110,
+                  height: 110,
+                  fit: BoxFit.cover,
                 ),
-                child: const Icon(Icons.handyman_rounded,
-                    size: 56, color: AppColors.primary),
               ),
               const SizedBox(height: 28),
               const Text('ServiçoFácil',
