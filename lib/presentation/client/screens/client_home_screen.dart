@@ -6,9 +6,11 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_routes.dart';
 import '../../../data/models/worker_model.dart';
 import '../controllers/client_home_controller.dart';
+import '../controllers/client_profile_controller.dart';
 import '../widgets/filter_bottom_sheet.dart';
 import '../widgets/worker_card.dart';
 import '../widgets/worker_shimmer.dart';
+import 'client_profile_screen.dart' show ClientDrawer;
 
 // ─── Dados das categorias ─────────────────────────────────────────────────────
 
@@ -37,9 +39,13 @@ class ClientHomeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ctrl = Get.put(ClientHomeController());
+    // Instancia o ProfileController aqui para que o Drawer já o encontre
+    // registrado quando for aberto (Get.find em ClientDrawer).
+    Get.put(ClientProfileController(), permanent: true);
 
     return Scaffold(
       backgroundColor: AppColors.background,
+      drawer: const ClientDrawer(),
       body: SafeArea(
         child: RefreshIndicator(
           color: AppColors.primary,
@@ -131,34 +137,25 @@ class ClientHomeScreen extends StatelessWidget {
                 ],
               ),
               const SizedBox(width: 4),
-              // Avatar do usuário
-              GestureDetector(
-                onTap: () => Get.toNamed(AppRoutes.clientProfile),
-                child: _buildUserAvatar(ctrl),
+              // Avatar do usuário — abre o drawer lateral
+              Builder(
+                builder: (ctx) => GestureDetector(
+                  onTap: () => Scaffold.of(ctx).openDrawer(),
+                  child: Obx(() {
+                    final profileCtrl = Get.find<ClientProfileController>();
+                    return _ClientAvatar(initial: profileCtrl.nameInitial);
+                  }),
+                ),
               ),
             ],
           )),
     );
   }
 
+  // ignore: unused_element
   Widget _buildUserAvatar(ClientHomeController ctrl) {
-    final photoUrl = ctrl.currentUser.value?.photoUrl;
-    return CircleAvatar(
-      radius: 22,
-      backgroundColor: AppColors.border,
-      child: photoUrl != null
-          ? ClipOval(
-              child: CachedNetworkImage(
-                imageUrl: photoUrl,
-                width: 44,
-                height: 44,
-                fit: BoxFit.cover,
-                errorWidget: (_, __, ___) =>
-                    const Icon(Icons.person, color: AppColors.textHint),
-              ),
-            )
-          : const Icon(Icons.person, color: AppColors.textHint),
-    );
+    // Mantido para compatibilidade; o avatar real agora é o _ClientAvatar
+    return const SizedBox.shrink();
   }
 
   // ── 2. Barra de busca ──────────────────────────────────────────────────────
@@ -459,6 +456,42 @@ class ClientHomeScreen extends StatelessWidget {
                 label: const Text('Limpar filtros'),
               ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Avatar com inicial do nome ───────────────────────────────────────────────
+
+class _ClientAvatar extends StatelessWidget {
+  final String initial;
+  const _ClientAvatar({required this.initial});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 44,
+      height: 44,
+      decoration: BoxDecoration(
+        color: AppColors.primary,
+        shape: BoxShape.circle,
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primary.withOpacity(0.25),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Center(
+        child: Text(
+          initial,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 18,
+            fontWeight: FontWeight.w700,
+          ),
         ),
       ),
     );
