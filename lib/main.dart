@@ -27,7 +27,9 @@ import 'presentation/auth/screens/pending_verification_screen.dart';
 
 // ── Client ───────────────────────────────────────────────────────────────────
 import 'presentation/client/screens/client_home_screen.dart';
+import 'presentation/client/screens/client_profile_screen.dart';
 import 'presentation/client/controllers/client_home_controller.dart';
+import 'presentation/client/controllers/client_profile_controller.dart';
 
 // ── Worker ───────────────────────────────────────────────────────────────────
 import 'presentation/worker/screens/worker_home_screen.dart';
@@ -203,6 +205,7 @@ class ServicoFacilApp extends StatelessWidget {
           page: () => const ClientHomeScreen(),
           binding: BindingsBuilder(() {
             Get.lazyPut(() => ClientHomeController(), fenix: true);
+            Get.lazyPut(() => ClientProfileController(), fenix: true);
           }),
           transition: Transition.fadeIn,
         ),
@@ -224,7 +227,10 @@ class ServicoFacilApp extends StatelessWidget {
         ),
         GetPage(
           name: AppRoutes.clientProfile,
-          page: () => const PlaceholderScreen(title: 'Meu Perfil'),
+          page: () => const ClientProfileScreen(),
+          binding: BindingsBuilder(() {
+            Get.lazyPut(() => ClientProfileController(), fenix: true);
+          }),
           transition: Transition.rightToLeft,
         ),
 
