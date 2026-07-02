@@ -111,12 +111,7 @@ class LoginScreen extends StatelessWidget {
                 Obx(() => OutlineButton(
                   label: 'Continuar com Google',
                   onPressed: ctrl.isLoading.value ? null : ctrl.loginWithGoogle,
-                  iconWidget: Image.network(
-                    'https://www.google.com/favicon.ico',
-                    width: 20, height: 20,
-                    errorBuilder: (_, __, ___) =>
-                    const Icon(Icons.g_mobiledata, size: 22),
-                  ),
+                  iconWidget: const _GoogleIcon(),
                 )),
                 const SizedBox(height: 28),
 
@@ -176,3 +171,69 @@ class LoginScreen extends StatelessWidget {
   }
 }
 
+
+// ─── Ícone do Google desenhado em código (sem depender de rede) ───────────────
+class _GoogleIcon extends StatelessWidget {
+  const _GoogleIcon();
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 20,
+      height: 20,
+      child: CustomPaint(painter: _GooglePainter()),
+    );
+  }
+}
+
+class _GooglePainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final cx = size.width / 2;
+    final cy = size.height / 2;
+    final r = size.width / 2;
+
+    // Azul (fatia direita)
+    canvas.drawArc(
+      Rect.fromCircle(center: Offset(cx, cy), radius: r),
+      -0.3, 1.9, true,
+      Paint()..color = const Color(0xFF4285F4),
+    );
+    // Vermelho (fatia top-esquerda)
+    canvas.drawArc(
+      Rect.fromCircle(center: Offset(cx, cy), radius: r),
+      3.6, 1.6, true,
+      Paint()..color = const Color(0xFFEA4335),
+    );
+    // Amarelo (fatia bottom-esquerda)
+    canvas.drawArc(
+      Rect.fromCircle(center: Offset(cx, cy), radius: r),
+      5.2, 0.95, true,
+      Paint()..color = const Color(0xFFFBBC05),
+    );
+    // Verde (fatia bottom-direita)
+    canvas.drawArc(
+      Rect.fromCircle(center: Offset(cx, cy), radius: r),
+      6.15, 0.75, true,
+      Paint()..color = const Color(0xFF34A853),
+    );
+    // Branco no centro (cria o efeito "G")
+    canvas.drawCircle(
+      Offset(cx, cy), r * 0.62,
+      Paint()..color = Colors.white,
+    );
+    // Retângulo branco direito (corte do "G")
+    canvas.drawRect(
+      Rect.fromLTWH(cx, cy - r * 0.18, r, r * 0.36),
+      Paint()..color = Colors.white,
+    );
+    // Retângulo azul (barra direita do "G")
+    canvas.drawRect(
+      Rect.fromLTWH(cx, cy - r * 0.18, r * 0.9, r * 0.36),
+      Paint()..color = const Color(0xFF4285F4),
+    );
+  }
+
+  @override
+  bool shouldRepaint(_) => false;
+}
