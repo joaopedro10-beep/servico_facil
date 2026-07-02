@@ -12,7 +12,20 @@
           "package_name": "com.example.servico_facil"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "1092271704389-snf2mn3rpanq2944dt2m4eplpkl29rkh.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.servico_facil",
+            "certificate_hash": "39b88f9bca9d431491623c14f286ebfd3932deec"
+          }
+        },
+        {
+          "client_id": "1092271704389-jgf1t4egssv8j2ehrl33bb2dqmq4f1qr.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyA11EbqsKx3NMhsz5MIPcC3T6_DhlGeI8w"
@@ -20,7 +33,19 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1092271704389-jgf1t4egssv8j2ehrl33bb2dqmq4f1qr.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "1092271704389-o0f8ibgnj116k42i2fu70vqo4r6u13pj.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.servicoFacil"
+              }
+            }
+          ]
         }
       }
     }
