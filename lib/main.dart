@@ -68,7 +68,6 @@ import 'presentation/settings/screens/settings_screen.dart';
 import 'presentation/settings/controllers/settings_controller.dart';
 
 // ── Shared ───────────────────────────────────────────────────────────────────
-import 'presentation/shared/placeholder_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
