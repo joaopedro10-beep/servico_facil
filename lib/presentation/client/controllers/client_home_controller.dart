@@ -51,6 +51,8 @@ class ClientHomeController extends GetxController {
   // ── Estado ────────────────────────────────────────────────────────────────
   final isLoadingUser = true.obs;
   final currentUser = Rxn<UserModel>();
+  final filteredWorkers = <WorkerModel>[].obs;
+  final hasActiveFilters = false.obs;
 
   // Stream de workers do Firestore
   final allWorkers = <WorkerModel>[].obs;
@@ -71,63 +73,10 @@ class ClientHomeController extends GetxController {
   final notificationCount = 0.obs;
 
   // Resultado final após filtros
-  List<WorkerModel> get filteredWorkers {
-    var list = List<WorkerModel>.from(allWorkers);
 
-    // 1. Busca por nome ou categoria
-    final q = searchQuery.value.toLowerCase().trim();
-    if (q.isNotEmpty) {
-      list = list.where((w) {
-        return w.name.toLowerCase().contains(q) ||
-            w.categories.any((c) => c.toLowerCase().contains(q)) ||
-            w.description.toLowerCase().contains(q);
-      }).toList();
-    }
-
-    // 2. Chip de categoria
-    final cat = selectedCategory.value;
-    if (cat.isNotEmpty) {
-      list = list.where((w) => w.categories.contains(cat)).toList();
-    }
-
-    // 3. Filtros avançados
-    final f = filters.value;
-    if (f.onlyVerified) {
-      list = list.where((w) => w.isVerified).toList();
-    }
-    list = list.where((w) => w.pricePerHour <= f.maxPricePerHour).toList();
-
-    // 4. Distância (só se tiver localização)
-    if (locationGranted.value) {
-      list = list.where((w) {
-        final d = _distanceKm(userLat.value, userLng.value, w.address.lat, w.address.lng);
-        return d <= f.maxDistanceKm;
-      }).toList();
-    }
-
-    // 5. Ordenação
-    switch (f.sortBy) {
-      case SortBy.rating:
-        list.sort((a, b) => b.avgRating.compareTo(a.avgRating));
-        break;
-      case SortBy.price:
-        list.sort((a, b) => a.pricePerHour.compareTo(b.pricePerHour));
-        break;
-      case SortBy.distance:
-        if (locationGranted.value) {
-          list.sort((a, b) {
-            final da = _distanceKm(userLat.value, userLng.value, a.address.lat, a.address.lng);
-            final db = _distanceKm(userLat.value, userLng.value, b.address.lat, b.address.lng);
-            return da.compareTo(db);
-          });
-        }
-        break;
-    }
-
-    return list;
-  }
 
   // ── Lifecycle ─────────────────────────────────────────────────────────────
+
 
   @override
   void onInit() {
@@ -136,6 +85,13 @@ class ClientHomeController extends GetxController {
     _startWorkersStream();
     _requestLocation();
     _loadNotificationCount();
+
+    // Reaplica filtros automaticamente quando qualquer coisa muda
+    ever(allWorkers, (_) => _applyFilters());
+    ever(searchQuery, (_) => _applyFilters());
+    ever(selectedCategory, (_) => _applyFilters());
+    ever(filters, (_) => _applyFilters());
+    ever(locationGranted, (_) => _applyFilters());
   }
 
   @override
@@ -151,15 +107,16 @@ class ClientHomeController extends GetxController {
       final uid = _fb.uid;
       final user = await _ds.getUser(uid);
       currentUser.value = user;
-    } catch (_) {
-    } finally {
+    } catch (_) {} finally {
       isLoadingUser.value = false;
     }
   }
 
   String get firstName {
     final name = currentUser.value?.name ?? '';
-    return name.split(' ').first;
+    return name
+        .split(' ')
+        .first;
   }
 
   // ── Stream de workers ─────────────────────────────────────────────────────
@@ -170,7 +127,7 @@ class ClientHomeController extends GetxController {
   void _startWorkersStream() {
     isLoadingWorkers.value = true;
     _workersSub = _ds.watchAvailableWorkers().listen(
-      (list) {
+          (list) {
         allWorkers.assignAll(list);
         isLoadingWorkers.value = false;
       },
@@ -205,7 +162,8 @@ class ClientHomeController extends GetxController {
 
   double distanceToWorker(WorkerModel w) {
     if (!locationGranted.value) return 0;
-    return _distanceKm(userLat.value, userLng.value, w.address.lat, w.address.lng);
+    return _distanceKm(
+        userLat.value, userLng.value, w.address.lat, w.address.lng);
   }
 
   /// Fórmula de Haversine — retorna distância em km
@@ -228,24 +186,16 @@ class ClientHomeController extends GetxController {
 
   void selectCategory(String category) {
     selectedCategory.value =
-        selectedCategory.value == category ? '' : category;
+    selectedCategory.value == category ? '' : category;
   }
 
   void applyFilters(WorkerFilters newFilters) {
     filters.value = newFilters;
-    Get.back(); // fecha o BottomSheet
+    Get.back();
   }
 
   void resetFilters() {
     filters.value = const WorkerFilters();
-  }
-
-  bool get hasActiveFilters {
-    final f = filters.value;
-    return f.maxDistanceKm < 50 ||
-        f.maxPricePerHour < 500 ||
-        f.onlyVerified ||
-        f.sortBy != SortBy.rating;
   }
 
   // ── Notificações ──────────────────────────────────────────────────────────
@@ -253,5 +203,66 @@ class ClientHomeController extends GetxController {
   Future<void> _loadNotificationCount() async {
     // Placeholder — será implementado no prompt de notificações
     notificationCount.value = 0;
+  }
+
+
+  void _applyFilters() {
+    var list = List<WorkerModel>.from(allWorkers);
+
+    final q = searchQuery.value.toLowerCase().trim();
+    if (q.isNotEmpty) {
+      list = list.where((w) {
+        return w.name.toLowerCase().contains(q) ||
+            w.categories.any((c) => c.toLowerCase().contains(q)) ||
+            w.description.toLowerCase().contains(q);
+      }).toList();
+    }
+
+    final cat = selectedCategory.value;
+    if (cat.isNotEmpty) {
+      list = list.where((w) => w.categories.contains(cat)).toList();
+    }
+
+    final f = filters.value;
+    if (f.onlyVerified) {
+      list = list.where((w) => w.isVerified).toList();
+    }
+    list = list.where((w) => w.pricePerHour <= f.maxPricePerHour).toList();
+
+    if (locationGranted.value) {
+      list = list.where((w) {
+        final d = _distanceKm(
+            userLat.value, userLng.value, w.address.lat, w.address.lng);
+        return d <= f.maxDistanceKm;
+      }).toList();
+    }
+
+    switch (f.sortBy) {
+      case SortBy.rating:
+        list.sort((a, b) => b.avgRating.compareTo(a.avgRating));
+        break;
+      case SortBy.price:
+        list.sort((a, b) => a.pricePerHour.compareTo(b.pricePerHour));
+        break;
+      case SortBy.distance:
+        if (locationGranted.value) {
+          list.sort((a, b) {
+            final da = _distanceKm(
+                userLat.value, userLng.value, a.address.lat, a.address.lng);
+            final db = _distanceKm(
+                userLat.value, userLng.value, b.address.lat, b.address.lng);
+            return da.compareTo(db);
+          });
+        }
+        break;
+    }
+
+    filteredWorkers.assignAll(list);
+
+    final activeF = filters.value;
+    hasActiveFilters.value = activeF.maxDistanceKm < 50 ||
+        activeF.maxPricePerHour < 500 ||
+        activeF.onlyVerified ||
+        activeF.sortBy != SortBy.rating;
   }
 }
