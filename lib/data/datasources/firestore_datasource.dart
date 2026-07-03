@@ -3,9 +3,13 @@ import 'package:get/get.dart';
 
 import '../../core/errors/app_exceptions.dart';
 import '../../core/services/firebase_service.dart';
-import '../models/models.dart';
+import '../models/user_model.dart';
+import '../models/worker_model.dart';
 import '../models/order_model.dart';
-import '../models/models.dart';
+import '../models/review_model.dart';
+import '../models/message_model.dart';
+import '../models/report_model.dart';
+import '../models/user_address.dart';
 
 
 /// FirestoreDatasource — operações CRUD para todas as coleções do Firestore.
