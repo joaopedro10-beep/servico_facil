@@ -54,6 +54,14 @@ class _SplashScreenState extends State<SplashScreen>
       return;
     }
 
+    // Admin tem prioridade absoluta — é verificado antes de qualquer tipo de usuário.
+    // Isso garante que um admin nunca cai na tela de cliente ou prestador.
+    final isAdmin = await fb.isAdmin();
+    if (isAdmin) {
+      Get.offAllNamed(AppRoutes.adminHome);
+      return;
+    }
+
     // Verifica tipo do usuário
     const storage = FlutterSecureStorage(
       aOptions: AndroidOptions(encryptedSharedPreferences: true),

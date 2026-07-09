@@ -38,4 +38,7 @@ class AppRoutes {
   static const block = '/block';
   static const reviews = '/reviews';
 
+  // Admin
+  static const adminHome = '/admin/home';
+
 }

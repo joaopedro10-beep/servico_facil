@@ -69,6 +69,11 @@ import 'presentation/settings/controllers/settings_controller.dart';
 
 // ── Shared ───────────────────────────────────────────────────────────────────
 
+// ── Admin ─────────────────────────────────────────────────────────────────────
+import 'presentation/admin/screens/admin_home_screen.dart';
+import 'presentation/admin/controllers/admin_controller.dart';
+import 'data/datasources/admin_datasource.dart';
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -350,6 +355,17 @@ class ServicoFacilApp extends StatelessWidget {
             Get.lazyPut(() => SettingsController(), fenix: true);
           }),
           transition: Transition.rightToLeft,
+        ),
+
+        // ── Admin ─────────────────────────────────────────────────────────
+        GetPage(
+          name: AppRoutes.adminHome,
+          page: () => const AdminHomeScreen(),
+          binding: BindingsBuilder(() {
+            Get.lazyPut(() => AdminDatasource(), fenix: true);
+            Get.lazyPut(() => AdminController(), fenix: true);
+          }),
+          transition: Transition.fadeIn,
         ),
       ];
 }
