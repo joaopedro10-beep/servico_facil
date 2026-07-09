@@ -7,6 +7,7 @@ import '../../../core/constants/app_routes.dart';
 import '../../../core/errors/app_exceptions.dart';
 import '../../../core/services/cep_service.dart';
 import '../../../data/repositories/auth_repository_impl.dart';
+import '../../../core/services/firebase_service.dart';
 
 class AuthController extends GetxController {
   final AuthRepositoryImpl _repo = Get.find<AuthRepositoryImpl>();
@@ -341,11 +342,17 @@ class AuthController extends GetxController {
   }
 
   // ─── Navegação pós-login ──────────────────────────────────────────────────
-  /// Decide para onde mandar o usuário após login/cadastro. Para clientes,
-  /// verifica antes se o perfil precisa ser completado (caso de quem entrou
-  /// via Google sem CPF/endereço ainda) — sem isso, ele cairia direto na
-  /// Home e só descobriria o bloqueio ao tentar solicitar um serviço.
+  /// Decide para onde mandar o usuário após login/cadastro.
+  /// Admin → painel admin | Worker → home worker | Client → home cliente
   Future<void> _navigateAfterLogin(String type) async {
+    // Verifica se é admin (custom claim no Firebase Auth)
+    final fb = Get.find<FirebaseService>();
+    final isAdmin = await fb.isAdmin();
+    if (isAdmin) {
+      Get.offAllNamed(AppRoutes.adminHome);
+      return;
+    }
+
     if (type == 'worker') {
       Get.offAllNamed(AppRoutes.workerHome);
       return;
