@@ -86,6 +86,13 @@ class WorkerHomeScreen extends StatelessWidget {
                   ),
                 ],
               )),
+          const SizedBox(width: 4),
+          IconButton(
+            icon: const Icon(Icons.logout_rounded,
+                color: AppColors.textSecondary, size: 22),
+            tooltip: 'Sair da conta',
+            onPressed: ctrl.signOut,
+          ),
         ],
       ),
     );

@@ -1,8 +1,11 @@
 import 'dart:async';
+import 'package:flutter/material.dart';
 
 import 'package:get/get.dart';
 
 import '../../../core/services/firebase_service.dart';
+import '../../../core/constants/app_routes.dart';
+import '../../../data/repositories/auth_repository_impl.dart';
 import '../../../data/datasources/firestore_datasource.dart';
 import '../../../data/models/order_model.dart';
 import '../../../data/models/worker_model.dart';
@@ -142,4 +145,30 @@ class WorkerHomeController extends GetxController {
       targetId: order.id,
     );
   }
+  // ─── Logout ───────────────────────────────────────────────────────────────
+
+  Future<void> signOut() async {
+    final confirm = await Get.dialog<bool>(
+      AlertDialog(
+        title: const Text('Sair da conta'),
+        content: const Text('Tem certeza que deseja sair?'),
+        actions: [
+          TextButton(
+            onPressed: () => Get.back(result: false),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Get.back(result: true),
+            child: const Text('Sair',
+                style: TextStyle(color: Colors.red, fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+    final repo = Get.find<AuthRepositoryImpl>();
+    await repo.signOut();
+    Get.offAllNamed(AppRoutes.welcome);
+  }
+
 }
