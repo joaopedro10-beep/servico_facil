@@ -15,22 +15,27 @@ import 'sections/worker_profile_section.dart';
 // O app do cliente usa verde (#1D9E75); o prestador usa azul (#1565C0) conforme
 // a imagem de referência.
 class WTheme {
-  static const blue       = Color(0xFF1565C0);
-  static const blueDark   = Color(0xFF003c8f);
-  static const blueLight  = Color(0xFFE3F2FD);
-  static const green      = Color(0xFF2E7D32);
-  static const greenLight = Color(0xFF4CAF50);
-  static const red        = Color(0xFFD32F2F);
-  static const redLight   = Color(0xFFFFEBEE);
-  static const amber      = Color(0xFFF9A825);
-  static const amberBg    = Color(0xFFFFF8E1);
-  static const card       = Color(0xFFFFFFFF);
-  static const background = Color(0xFFF5F7FA);
-  static const border     = Color(0xFFE0E7EF);
-  static const textDark   = Color(0xFF1A237E);
-  static const textGray   = Color(0xFF546E7A);
-  static const textLight  = Color(0xFF90A4AE);
-  static const purple     = Color(0xFF6A1B9A);
+  // Verde da logo em todas as telas do prestador
+  static const primary     = Color(0xFF1D9E75); // verde logo
+  static const primaryDark = Color(0xFF0F6E56); // verde escuro
+  static const primaryLight= Color(0xFFE8F5F0); // verde clarinho
+  // Manter blue como alias para não quebrar referências existentes
+  static const blue        = primary;
+  static const blueDark    = primaryDark;
+  static const blueLight   = primaryLight;
+  static const green       = Color(0xFF2E7D32);
+  static const greenLight  = Color(0xFF4CAF50);
+  static const red         = Color(0xFFD32F2F);
+  static const redLight    = Color(0xFFFFEBEE);
+  static const amber       = Color(0xFFF9A825);
+  static const amberBg     = Color(0xFFFFF8E1);
+  static const card        = Color(0xFFFFFFFF);
+  static const background  = Color(0xFFF5F7FA);
+  static const border      = Color(0xFFE0E7EF);
+  static const textDark    = Color(0xFF0D3D2E);
+  static const textGray    = Color(0xFF546E7A);
+  static const textLight   = Color(0xFF90A4AE);
+  static const purple      = Color(0xFF6A1B9A);
 }
 
 // ─── Itens bottom nav ─────────────────────────────────────────────────────────
@@ -41,12 +46,12 @@ class _NavItem {
   const _NavItem(this.icon, this.activeIcon, this.label);
 }
 
+// 4 abas — Perfil fica no Drawer lateral (sem aba Perfil no BottomNav)
 const _navItems = [
   _NavItem(Icons.home_outlined,          Icons.home_rounded,          'Início'),
   _NavItem(Icons.receipt_long_outlined,  Icons.receipt_long_rounded,  'Solicitações'),
   _NavItem(Icons.calendar_today_outlined,Icons.calendar_today_rounded,'Agenda'),
   _NavItem(Icons.account_balance_wallet_outlined,Icons.account_balance_wallet_rounded,'Ganhos'),
-  _NavItem(Icons.person_outline_rounded, Icons.person_rounded,        'Perfil'),
 ];
 
 // ─── Root ─────────────────────────────────────────────────────────────────────
@@ -85,7 +90,7 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
             WorkerRequestsSection(ctrl: ctrl),
             WorkerAgendaSection(ctrl: ctrl),
             WorkerEarningsSection(ctrl: ctrl),
-            WorkerProfileSection(ctrl: ctrl),
+            // Perfil acessível pelo Drawer lateral
           ],
         ),
       ),

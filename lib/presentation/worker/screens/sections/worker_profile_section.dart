@@ -203,27 +203,33 @@ class WorkerProfileSection extends StatelessWidget {
                 ),
                 const SizedBox(height: 20),
 
-                // Sair
-                SizedBox(
-                  width: double.infinity,
-                  height: 50,
-                  child: OutlinedButton.icon(
-                    onPressed: ctrl.signOut,
-                    icon: const Icon(Icons.logout_rounded,
-                        color: WTheme.red),
-                    label: const Text('Sair da conta',
-                        style: TextStyle(
-                            color: WTheme.red,
-                            fontWeight: FontWeight.w700),
-                        overflow: TextOverflow.ellipsis),
-                    style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: WTheme.red),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14)),
+                // Botão Sair — com SafeArea para ficar acima dos botões do celular
+                SafeArea(
+                  top: false,
+                  child: Padding(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: SizedBox(
+                      width: double.infinity,
+                      height: 54,
+                      child: OutlinedButton.icon(
+                        onPressed: ctrl.signOut,
+                        icon: const Icon(Icons.logout_rounded,
+                            color: WTheme.red),
+                        label: const Text('Sair da conta',
+                            style: TextStyle(
+                                color: WTheme.red,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 15),
+                            overflow: TextOverflow.ellipsis),
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(color: WTheme.red, width: 1.5),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16)),
+                        ),
+                      ),
                     ),
                   ),
                 ),
-                const SizedBox(height: 16),
               ],
             ),
           ),

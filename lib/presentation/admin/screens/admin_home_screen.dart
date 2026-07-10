@@ -22,12 +22,12 @@ class _BottomItem {
   const _BottomItem(this.icon, this.activeIcon, this.label, this.sectionIndex);
 }
 
+// 4 abas — Perfil fica no Drawer lateral (sem aba Perfil no BottomNav)
 const _bottomItems = [
   _BottomItem(Icons.dashboard_outlined,      Icons.dashboard_rounded,      'Dashboard',  0),
   _BottomItem(Icons.hourglass_empty_rounded, Icons.hourglass_top_rounded,  'Aprovações', 1),
   _BottomItem(Icons.receipt_long_outlined,   Icons.receipt_long_rounded,   'Serviços',   4),
   _BottomItem(Icons.bar_chart_outlined,      Icons.bar_chart_rounded,      'Relatórios', 7),
-  _BottomItem(Icons.person_outline_rounded,  Icons.person_rounded,         'Perfil',     0),
 ];
 
 // ─── Itens do drawer ──────────────────────────────────────────────────────────
@@ -366,7 +366,9 @@ class _AdminDrawer extends StatelessWidget {
                   );
                 })),
                 const Divider(indent: 16, endIndent: 16),
-                _DrawerMenuItem(
+                SafeArea(
+                  top: false,
+                  child: _DrawerMenuItem(
                   icon: Icons.logout_rounded,
                   label: 'Sair',
                   selected: false,
@@ -397,6 +399,7 @@ class _AdminDrawer extends StatelessWidget {
                       Get.offAllNamed(AppRoutes.welcome);
                     }
                   },
+                ),
                 ),
               ],
             ),
