@@ -41,4 +41,7 @@ class AppRoutes {
   // Admin
   static const adminHome = '/admin/home';
 
+  // Tela de sucesso após completar cadastro
+  static const completeProfileSuccess = '/complete-profile/success';
+
 }

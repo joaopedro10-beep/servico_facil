@@ -20,6 +20,7 @@ import 'presentation/auth/screens/welcome_screen.dart';
 import 'presentation/auth/screens/login_screen.dart';
 import 'presentation/auth/screens/register_client_screen.dart';
 import 'presentation/auth/screens/complete_profile_screen.dart';
+import 'presentation/auth/screens/complete_profile_success_screen.dart';
 import 'presentation/auth/screens/register_worker_screen.dart';
 import 'presentation/auth/screens/document_upload_screen.dart';
 import 'presentation/auth/screens/verify_email_screen.dart';
@@ -95,10 +96,15 @@ void main() async {
     DeviceOrientation.portraitDown,
   ]);
 
+  // Remove a barra de navegação horizontal do Android (3 botões/gestos)
+  SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
       statusBarIconBrightness: Brightness.dark,
+      systemNavigationBarColor: Colors.transparent,
+      systemNavigationBarDividerColor: Colors.transparent,
+      systemNavigationBarIconBrightness: Brightness.dark,
     ),
   );
 
@@ -131,10 +137,15 @@ class ServicoFacilApp extends StatelessWidget {
       ],
 
       // Fecha teclado ao tocar fora
-      builder: (context, child) => GestureDetector(
-        onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
-        child: child!,
-      ),
+      builder: (context, child) {
+        return MediaQuery(
+          data: MediaQuery.of(context).copyWith(viewInsets: EdgeInsets.zero),
+          child: GestureDetector(
+            onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+            child: child!,
+          ),
+        );
+      },
 
       getPages: _pages(),
     );
@@ -177,6 +188,12 @@ class ServicoFacilApp extends StatelessWidget {
           page: () => const CompleteProfileScreen(),
           binding: AuthBinding(),
           transition: Transition.rightToLeft,
+        ),
+
+        GetPage(
+          name: AppRoutes.completeProfileSuccess,
+          page: () => const CompleteProfileSuccessScreen(),
+          transition: Transition.fadeIn,
         ),
         GetPage(
           name: AppRoutes.registerWorker,
