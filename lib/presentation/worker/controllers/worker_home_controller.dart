@@ -9,6 +9,7 @@ import '../../../data/repositories/auth_repository_impl.dart';
 import '../../../data/datasources/firestore_datasource.dart';
 import '../../../data/models/order_model.dart';
 import '../../../data/models/worker_model.dart';
+import '../../../data/models/review_model.dart';
 
 class WorkerHomeController extends GetxController {
   final FirestoreDatasource _ds = Get.find<FirestoreDatasource>();
@@ -21,7 +22,9 @@ class WorkerHomeController extends GetxController {
 
   final allOrders = <OrderModel>[].obs;
   final isLoadingOrders = true.obs;
+  final workerReviews = <ReviewModel>[].obs;
   StreamSubscription? _ordersSub;
+  StreamSubscription? _reviewsSub;
   StreamSubscription? _workerSub;
 
   // ── Computed ──────────────────────────────────────────────────────────────
@@ -68,16 +71,31 @@ class WorkerHomeController extends GetxController {
     super.onInit();
     _loadWorker();
     _startOrderStream();
+    _startReviewsStream();
   }
 
   @override
   void onClose() {
     _ordersSub?.cancel();
     _workerSub?.cancel();
+    _reviewsSub?.cancel();
     super.onClose();
   }
 
   // ── Worker ────────────────────────────────────────────────────────────────
+
+
+  void _startReviewsStream() {
+    _reviewsSub = _fb.reviewsRef
+        .where('targetId', isEqualTo: _fb.uid)
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .listen((snap) {
+      workerReviews.assignAll(
+        snap.docs.map((d) => ReviewModel.fromMap(d.data(), d.id)).toList(),
+      );
+    });
+  }
 
   /// Public reload — chamado pelo pull-to-refresh
   Future<void> reload() => _loadWorker();
