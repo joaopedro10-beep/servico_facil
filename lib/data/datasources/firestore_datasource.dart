@@ -500,4 +500,20 @@ class FirestoreDatasource {
     });
   }
 
+  // ─── Dicas de segurança (Firestore) ────────────────────────────────────────
+  /// Busca as dicas de segurança da coleção `safety_tips`, ordenadas por `order`.
+  /// Retorna lista vazia se a coleção não existir ou estiver vazia.
+  Future<List<dynamic>> getSafetyTips() async {
+    try {
+      final snap = await _fb.firestore
+          .collection('safety_tips')
+          .orderBy('order')
+          .get();
+      return snap.docs.map((d) => d.data()).toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+
 }
