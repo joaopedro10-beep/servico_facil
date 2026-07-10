@@ -10,193 +10,6 @@ import '../../../../data/models/order_model.dart';
 import '../../controllers/client_controller.dart';
 import '../client_home_screen.dart' show CTheme;
 
-class ClientSearchSection extends StatefulWidget {
-  final ClientController ctrl;
-  const ClientSearchSection({super.key, required this.ctrl});
-
-  @override
-  State<ClientSearchSection> createState() => _ClientSearchSectionState();
-}
-
-class _ClientSearchSectionState extends State<ClientSearchSection> {
-  final _searchCtrl = TextEditingController();
-
-  @override
-  void dispose() {
-    _searchCtrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(children: [
-      // Header + campo de busca
-      Container(
-        color: CTheme.blue,
-        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-        child: TextField(
-          controller: _searchCtrl,
-          onChanged: widget.ctrl.onSearch,
-          style: const TextStyle(fontSize: 14),
-          decoration: InputDecoration(
-            hintText: 'Qual serviço você precisa hoje?',
-            hintStyle: const TextStyle(
-                fontSize: 13, color: CTheme.textGray),
-            prefixIcon: const Icon(Icons.search_rounded,
-                color: CTheme.textGray, size: 20),
-            suffixIcon: Obx(() => widget.ctrl.searchQuery.value.isNotEmpty
-                ? IconButton(
-                    icon: const Icon(Icons.close_rounded, size: 18),
-                    onPressed: () {
-                      _searchCtrl.clear();
-                      widget.ctrl.onSearch('');
-                    })
-                : const SizedBox.shrink()),
-            filled: true,
-            fillColor: Colors.white,
-            contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
-            border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: BorderSide.none),
-          ),
-        ),
-      ),
-
-      // Resultados
-      Expanded(
-        child: Obx(() {
-          final workers = widget.ctrl.filteredWorkers;
-          if (widget.ctrl.isLoadingWorkers.value) {
-            return const Center(child: CircularProgressIndicator.adaptive());
-          }
-          if (workers.isEmpty) {
-            return Center(
-              child: Column(mainAxisSize: MainAxisSize.min, children: [
-                const Icon(Icons.search_off_rounded,
-                    size: 56, color: CTheme.textLight),
-                const SizedBox(height: 12),
-                Text(
-                  widget.ctrl.searchQuery.value.isNotEmpty
-                      ? 'Nenhum resultado para "${widget.ctrl.searchQuery.value}"'
-                      : 'Comece a digitar para buscar',
-                  style: const TextStyle(
-                      color: CTheme.textGray, fontSize: 14),
-                  textAlign: TextAlign.center,
-                  overflow: TextOverflow.ellipsis, maxLines: 2,
-                ),
-              ]),
-            );
-          }
-          return ListView.separated(
-            padding: const EdgeInsets.all(16),
-            itemCount: workers.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 10),
-            itemBuilder: (_, i) {
-              final w = workers[i];
-              final dist = widget.ctrl.distanceToWorker(w);
-              return GestureDetector(
-                onTap: () => widget.ctrl.goToWorkerProfile(w),
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: CTheme.border),
-                    boxShadow: const [
-                      BoxShadow(color: Color(0x0A000000),
-                          blurRadius: 6, offset: Offset(0, 2)),
-                    ],
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(14),
-                    child: Row(children: [
-                      CircleAvatar(
-                        radius: 26,
-                        backgroundColor: CTheme.blueLight,
-                        backgroundImage: w.photoUrl != null
-                            ? NetworkImage(w.photoUrl!)
-                            : null,
-                        child: w.photoUrl == null
-                            ? Text(
-                                w.name.isNotEmpty
-                                    ? w.name[0].toUpperCase()
-                                    : '?',
-                                style: const TextStyle(
-                                    fontSize: 20, fontWeight: FontWeight.w700,
-                                    color: CTheme.blue))
-                            : null,
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(w.name,
-                                style: const TextStyle(
-                                    fontWeight: FontWeight.w700, fontSize: 14),
-                                maxLines: 1, overflow: TextOverflow.ellipsis),
-                            Text(
-                              w.categories.isNotEmpty
-                                  ? w.categories.join(', ')
-                                  : '—',
-                              style: const TextStyle(
-                                  fontSize: 12, color: CTheme.textGray),
-                              maxLines: 1, overflow: TextOverflow.ellipsis,
-                            ),
-                            Row(children: [
-                              const Icon(Icons.star_rounded,
-                                  color: Colors.amber, size: 13),
-                              const SizedBox(width: 3),
-                              Text(w.avgRating.toStringAsFixed(1),
-                                  style: const TextStyle(
-                                      fontSize: 12, fontWeight: FontWeight.w700)),
-                              const SizedBox(width: 6),
-                              Expanded(
-                                child: Text(
-                                  'R\$ ${w.pricePerHour.toStringAsFixed(0)}/h',
-                                  style: const TextStyle(
-                                      fontSize: 11, color: CTheme.textGray),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ]),
-                          ],
-                        ),
-                      ),
-                      Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            if (widget.ctrl.locationGranted.value && dist > 0)
-                              Text('${dist.toStringAsFixed(1)} km',
-                                  style: const TextStyle(
-                                      fontSize: 11,
-                                      color: CTheme.blue,
-                                      fontWeight: FontWeight.w600)),
-                            const SizedBox(height: 8),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 10, vertical: 6),
-                              decoration: BoxDecoration(
-                                color: CTheme.blue,
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: const Text('Ver',
-                                  style: TextStyle(
-                                      color: Colors.white, fontSize: 12,
-                                      fontWeight: FontWeight.w700)),
-                            ),
-                          ]),
-                    ]),
-                  ),
-                ),
-              );
-            },
-          );
-        }),
-      ),
-    ]);
-  }
-}
-
 // ═══════════════════════════════════════════════════════════════════════════
 // AGENDAMENTOS
 // ═══════════════════════════════════════════════════════════════════════════
@@ -306,7 +119,7 @@ class _AppointmentCard extends StatelessWidget {
       case OrderStatus.pending:    return CTheme.amber;
       case OrderStatus.accepted:   return CTheme.blue;
       case OrderStatus.inProgress: return const Color(0xFF8B5CF6);
-      case OrderStatus.done:       return CTheme.green;
+      case OrderStatus.done: return CTheme.primary;
       case OrderStatus.cancelled:  return CTheme.red;
     }
   }
@@ -726,25 +539,32 @@ class ClientProfileSection extends StatelessWidget {
                 ),
                 const SizedBox(height: 20),
 
-                // Sair
-                SizedBox(
-                  width: double.infinity,
-                  height: 50,
-                  child: OutlinedButton.icon(
-                    onPressed: ctrl.signOut,
-                    icon: const Icon(Icons.logout_rounded, color: CTheme.red),
-                    label: const Text('Sair da conta',
-                        style: TextStyle(
-                            color: CTheme.red, fontWeight: FontWeight.w700),
-                        overflow: TextOverflow.ellipsis),
-                    style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: CTheme.red),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14)),
+                // Botão Sair — SafeArea garante distância dos botões do celular
+                SafeArea(
+                  top: false,
+                  child: Padding(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: SizedBox(
+                      width: double.infinity,
+                      height: 54,
+                      child: OutlinedButton.icon(
+                        onPressed: ctrl.signOut,
+                        icon: const Icon(Icons.logout_rounded, color: CTheme.red),
+                        label: const Text('Sair da conta',
+                            style: TextStyle(
+                                color: CTheme.red,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 15),
+                            overflow: TextOverflow.ellipsis),
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(color: CTheme.red, width: 1.5),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16)),
+                        ),
+                      ),
                     ),
                   ),
                 ),
-                const SizedBox(height: 16),
               ],
             ),
           ),

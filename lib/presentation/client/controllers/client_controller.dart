@@ -1,147 +1,112 @@
 import 'dart:async';
-import 'dart:math';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:image_picker/image_picker.dart';
+import 'dart:io';
 
 import '../../../core/constants/app_routes.dart';
 import '../../../core/services/firebase_service.dart';
 import '../../../data/datasources/firestore_datasource.dart';
 import '../../../data/models/order_model.dart';
+import '../../../data/models/user_address.dart';
 import '../../../data/models/user_model.dart';
-import '../../../data/models/worker_model.dart';
 import '../../../data/repositories/auth_repository_impl.dart';
 
-// ─── Filtros de busca ────────────────────────────────────────────────────────
-class WorkerFilters {
-  final double maxDistanceKm;
-  final double maxPricePerHour;
-  final bool onlyVerified;
-  final String sortBy; // 'rating' | 'price' | 'distance'
-
-  const WorkerFilters({
-    this.maxDistanceKm   = 50,
-    this.maxPricePerHour = 500,
-    this.onlyVerified    = false,
-    this.sortBy          = 'rating',
-  });
-
-  WorkerFilters copyWith({
-    double? maxDistanceKm,
-    double? maxPricePerHour,
-    bool? onlyVerified,
-    String? sortBy,
-  }) => WorkerFilters(
-    maxDistanceKm:   maxDistanceKm   ?? this.maxDistanceKm,
-    maxPricePerHour: maxPricePerHour ?? this.maxPricePerHour,
-    onlyVerified:    onlyVerified    ?? this.onlyVerified,
-    sortBy:          sortBy          ?? this.sortBy,
-  );
+// ─── Categorias de serviço ────────────────────────────────────────────────────
+class ServiceCategory {
+  final String name;
+  final IconData icon;
+  const ServiceCategory(this.name, this.icon);
 }
 
+const serviceCategories = [
+  ServiceCategory('Eletricista',        Icons.electrical_services_rounded),
+  ServiceCategory('Encanador',          Icons.plumbing_rounded),
+  ServiceCategory('Pintor',             Icons.format_paint_rounded),
+  ServiceCategory('Pedreiro',           Icons.construction_rounded),
+  ServiceCategory('Jardineiro',         Icons.park_rounded),
+  ServiceCategory('Diarista',           Icons.cleaning_services_rounded),
+  ServiceCategory('Montador de Móveis', Icons.chair_rounded),
+  ServiceCategory('Ar-condicionado',    Icons.ac_unit_rounded),
+  ServiceCategory('Chaveiro',           Icons.vpn_key_rounded),
+  ServiceCategory('Mudança',            Icons.local_shipping_rounded),
+];
+
+// ─── Controller unificado do cliente ─────────────────────────────────────────
 class ClientController extends GetxController {
   final FirestoreDatasource _ds = Get.find<FirestoreDatasource>();
   final FirebaseService _fb = Get.find<FirebaseService>();
 
-  // ─── Usuário ──────────────────────────────────────────────────────────────
-  final currentUser       = Rxn<UserModel>();
-  final isLoadingUser     = true.obs;
+  // ── Usuário ───────────────────────────────────────────────────────────────
+  final currentUser    = Rxn<UserModel>();
+  final isLoadingUser  = true.obs;
 
-  // ─── Workers ──────────────────────────────────────────────────────────────
-  final allWorkers        = <WorkerModel>[].obs;
-  final filteredWorkers   = <WorkerModel>[].obs;
-  final hasActiveFilters  = false.obs;
-  final isLoadingWorkers  = true.obs;
+  // ── Pedidos do cliente ────────────────────────────────────────────────────
+  final myOrders        = <OrderModel>[].obs;
+  final isLoadingOrders = true.obs;
 
-  // ─── Busca / filtros ──────────────────────────────────────────────────────
-  final searchQuery       = ''.obs;
-  final selectedCategory  = ''.obs;
-  final filters           = const WorkerFilters().obs;
-
-  // ─── Localização ─────────────────────────────────────────────────────────
-  final userLat           = 0.0.obs;
-  final userLng           = 0.0.obs;
-  final locationGranted   = false.obs;
-
-  // ─── Pedidos ──────────────────────────────────────────────────────────────
-  final myOrders          = <OrderModel>[].obs;
-  final isLoadingOrders   = true.obs;
-
-  // ─── Notificações ─────────────────────────────────────────────────────────
+  // ── Notificações badge ────────────────────────────────────────────────────
   final notificationCount = 0.obs;
 
-  StreamSubscription? _workersSub;
-  StreamSubscription? _ordersSub;
+  // ── Formulário de solicitação ─────────────────────────────────────────────
+  final selectedCategory  = ''.obs;
+  final isSubmitting      = false.obs;
+  final submitError       = ''.obs;
+  final submitSuccess     = false.obs;
 
-  // ─── Categorias da imagem de referência ───────────────────────────────────
-  static const categories = [
-    ('Eletricista',       '⚡'),
-    ('Encanador',         '🔧'),
-    ('Pintor',            '🎨'),
-    ('Pedreiro',          '🏗️'),
-    ('Jardineiro',        '🌿'),
-    ('Diarista',          '🧹'),
-    ('Montador de Móveis','🪑'),
-    ('Ar-condicionado',   '❄️'),
-  ];
+  // Campos do formulário
+  final descriptionCtrl  = TextEditingController();
+  final scheduledDate    = Rxn<DateTime>();
+  final photoFiles       = <File>[].obs;
+  final serviceAddress   = Rxn<UserAddress>();
+
+  // ── Localização ───────────────────────────────────────────────────────────
+  final userLat         = 0.0.obs;
+  final userLng         = 0.0.obs;
+  final locationGranted = false.obs;
+
+  StreamSubscription? _ordersSub;
 
   @override
   void onInit() {
     super.onInit();
     _loadUser();
-    _startWorkersStream();
     _startOrdersStream();
     _requestLocation();
-
-    // Reaplica filtros automaticamente
-    ever(allWorkers,      (_) => _applyFilters());
-    ever(searchQuery,     (_) => _applyFilters());
-    ever(selectedCategory,(_) => _applyFilters());
-    ever(filters,         (_) => _applyFilters());
-    ever(locationGranted, (_) => _applyFilters());
   }
 
   @override
   void onClose() {
-    _workersSub?.cancel();
     _ordersSub?.cancel();
+    descriptionCtrl.dispose();
     super.onClose();
   }
 
   // ─── Carregamento ─────────────────────────────────────────────────────────
-  Future<void> reload() async {
-    await _loadUser();
-    _startWorkersStream();
-  }
+  Future<void> reload() async => _loadUser();
 
   Future<void> _loadUser() async {
     isLoadingUser.value = true;
     try {
       final u = await _ds.getUser(_fb.uid);
       currentUser.value = u;
+      // Usa endereço do perfil como padrão para o serviço
+      if (u?.address.city.isNotEmpty == true) {
+        serviceAddress.value = u!.address;
+      }
     } catch (_) {
     } finally {
       isLoadingUser.value = false;
     }
   }
 
-  void _startWorkersStream() {
-    isLoadingWorkers.value = true;
-    _workersSub?.cancel();
-    _workersSub = _ds.watchAvailableWorkers().listen(
-      (list) {
-        allWorkers.assignAll(list);
-        isLoadingWorkers.value = false;
-      },
-      onError: (_) => isLoadingWorkers.value = false,
-    );
-  }
-
   void _startOrdersStream() {
     isLoadingOrders.value = true;
     _ordersSub = _ds.watchClientOrders(_fb.uid).listen(
-      (list) {
+          (list) {
         myOrders.assignAll(list);
         isLoadingOrders.value = false;
       },
@@ -165,100 +130,6 @@ class ClientController extends GetxController {
     } catch (_) {}
   }
 
-  // ─── Filtros ──────────────────────────────────────────────────────────────
-  void _applyFilters() {
-    var list = List<WorkerModel>.from(allWorkers);
-    final q   = searchQuery.value.toLowerCase().trim();
-    final cat = selectedCategory.value;
-    final f   = filters.value;
-
-    if (q.isNotEmpty) {
-      list = list.where((w) =>
-          w.name.toLowerCase().contains(q) ||
-          w.categories.any((c) => c.toLowerCase().contains(q)) ||
-          w.description.toLowerCase().contains(q)).toList();
-    }
-
-    if (cat.isNotEmpty) {
-      list = list.where((w) => w.categories
-          .any((c) => c.toLowerCase().contains(cat.toLowerCase()))).toList();
-    }
-
-    if (f.onlyVerified) {
-      list = list.where((w) => w.isVerified).toList();
-    }
-
-    list = list.where((w) => w.pricePerHour <= f.maxPricePerHour).toList();
-
-    if (locationGranted.value) {
-      list = list.where((w) {
-        final d = distanceToWorker(w);
-        return d <= f.maxDistanceKm;
-      }).toList();
-    }
-
-    switch (f.sortBy) {
-      case 'rating':
-        list.sort((a, b) => b.avgRating.compareTo(a.avgRating));
-        break;
-      case 'price':
-        list.sort((a, b) => a.pricePerHour.compareTo(b.pricePerHour));
-        break;
-      case 'distance':
-        if (locationGranted.value) {
-          list.sort((a, b) =>
-              distanceToWorker(a).compareTo(distanceToWorker(b)));
-        }
-        break;
-    }
-
-    filteredWorkers.assignAll(list);
-    hasActiveFilters.value = f.maxDistanceKm < 50 ||
-        f.maxPricePerHour < 500 ||
-        f.onlyVerified ||
-        f.sortBy != 'rating';
-  }
-
-  double distanceToWorker(WorkerModel w) {
-    if (!locationGranted.value) return 0;
-    return _distanceKm(
-        userLat.value, userLng.value, w.address.lat, w.address.lng);
-  }
-
-  double _distanceKm(double lat1, double lon1, double lat2, double lon2) {
-    const R = 6371.0;
-    final dLat = _rad(lat2 - lat1);
-    final dLon = _rad(lon2 - lon1);
-    final a = sin(dLat / 2) * sin(dLat / 2) +
-        cos(_rad(lat1)) * cos(_rad(lat2)) * sin(dLon / 2) * sin(dLon / 2);
-    return R * 2 * atan2(sqrt(a), sqrt(1 - a));
-  }
-
-  double _rad(double deg) => deg * pi / 180;
-
-  // ─── Ações ────────────────────────────────────────────────────────────────
-  void onSearch(String v) => searchQuery.value = v;
-
-  void selectCategory(String cat) {
-    selectedCategory.value = selectedCategory.value == cat ? '' : cat;
-  }
-
-  void applyFilters(WorkerFilters f) => filters.value = f;
-  void resetFilters() {
-    filters.value = const WorkerFilters();
-    searchQuery.value = '';
-    selectedCategory.value = '';
-  }
-
-  void goToWorkerProfile(WorkerModel w) =>
-      Get.toNamed(AppRoutes.workerProfile, arguments: w);
-
-  void goToOrders() => Get.toNamed(AppRoutes.myOrders);
-
-  void goToChats() => Get.toNamed(AppRoutes.chatsList);
-
-  void goToProfile() => Get.toNamed(AppRoutes.clientProfile);
-
   // ─── Getters ──────────────────────────────────────────────────────────────
   String get firstName {
     final n = currentUser.value?.name ?? '';
@@ -271,12 +142,138 @@ class ClientController extends GetxController {
   }
 
   List<OrderModel> get activeOrders => myOrders.where((o) =>
-      o.status == OrderStatus.pending ||
+  o.status == OrderStatus.pending ||
       o.status == OrderStatus.accepted ||
       o.status == OrderStatus.inProgress).toList();
 
   List<OrderModel> get doneOrders =>
       myOrders.where((o) => o.status == OrderStatus.done).toList();
+
+  OrderModel? get latestActiveOrder =>
+      activeOrders.isNotEmpty ? activeOrders.first : null;
+
+  // ─── Formulário de solicitação ────────────────────────────────────────────
+  void selectCategory(String cat) {
+    selectedCategory.value = cat;
+    submitError.value = '';
+    submitSuccess.value = false;
+  }
+
+  void clearForm() {
+    selectedCategory.value = '';
+    descriptionCtrl.clear();
+    scheduledDate.value = null;
+    photoFiles.clear();
+    submitError.value = '';
+    submitSuccess.value = false;
+    serviceAddress.value = currentUser.value?.address;
+  }
+
+  Future<void> pickPhoto() async {
+    if (photoFiles.length >= 3) return;
+    try {
+      final picker = ImagePicker();
+      final picked = await picker.pickImage(source: ImageSource.gallery,
+          imageQuality: 70);
+      if (picked != null) photoFiles.add(File(picked.path));
+    } catch (_) {}
+  }
+
+  void removePhoto(int index) {
+    if (index < photoFiles.length) photoFiles.removeAt(index);
+  }
+
+  // ─── Submeter solicitação ─────────────────────────────────────────────────
+  // REGRA DE NEGÓCIO: o cliente NÃO escolhe um prestador.
+  // A plataforma envia a solicitação e o primeiro prestador disponível
+  // da categoria que aceitar é vinculado automaticamente.
+  Future<void> submitRequest() async {
+    if (selectedCategory.value.isEmpty) {
+      submitError.value = 'Selecione uma categoria de serviço.';
+      return;
+    }
+    if (descriptionCtrl.text.trim().isEmpty) {
+      submitError.value = 'Descreva o serviço que precisa.';
+      return;
+    }
+    if (scheduledDate.value == null) {
+      submitError.value = 'Informe a data e horário desejado.';
+      return;
+    }
+    if (serviceAddress.value == null ||
+        serviceAddress.value!.city.isEmpty) {
+      submitError.value = 'Informe o endereço do serviço.';
+      return;
+    }
+
+    isSubmitting.value = true;
+    submitError.value = '';
+
+    try {
+      final user = currentUser.value;
+      final now  = DateTime.now();
+
+      // Cria pedido sem workerId definido — ficará vazio até um
+      // prestador aceitar (modelo pull: prestador escolhe aceitar)
+      final order = OrderModel(
+        id:              '',
+        userId:          _fb.uid,
+        workerId:        '', // vazio até aceite
+        serviceCategory: selectedCategory.value,
+        description:     descriptionCtrl.text.trim(),
+        scheduledAt:     scheduledDate.value!,
+        status:          OrderStatus.pending,
+        address:         serviceAddress.value!,
+        createdAt:       now,
+        updatedAt:       now,
+        clientName:      user?.name,
+      );
+
+      await _ds.createOrder(order);
+
+      // Notifica prestadores disponíveis da categoria
+      // (Cloud Function ou datasource faz o dispatch)
+      await _ds.saveNotification(
+        targetUserId: 'broadcast_${selectedCategory.value}',
+        title:        'Nova solicitação de ${selectedCategory.value}',
+        body:         descriptionCtrl.text.trim(),
+        type:         'new_order',
+        targetId:     selectedCategory.value,
+      );
+
+      submitSuccess.value = true;
+      // NÃO chama clearForm() aqui — o formulário é limpo pelo botão
+      // "Nova Solicitação" na tela de sucesso, para o usuário ver o sucesso
+    } on FirebaseException catch (e) {
+      submitError.value = 'Erro ao enviar: ${e.message}';
+    } catch (e) {
+      submitError.value = 'Erro inesperado. Tente novamente.';
+    } finally {
+      isSubmitting.value = false;
+    }
+  }
+
+  // ─── Cancelar pedido ──────────────────────────────────────────────────────
+  Future<void> cancelOrder(OrderModel order) async {
+    if (!order.canClientCancel) return;
+    final ok = await Get.dialog<bool>(AlertDialog(
+      title: const Text('Cancelar solicitação'),
+      content: const Text('Deseja cancelar esta solicitação?'),
+      actions: [
+        TextButton(onPressed: () => Get.back(result: false),
+            child: const Text('Não')),
+        TextButton(
+          onPressed: () => Get.back(result: true),
+          child: const Text('Sim, cancelar',
+              style: TextStyle(color: Colors.red)),
+        ),
+      ],
+    ));
+    if (ok != true) return;
+    try {
+      await _ds.updateOrderStatusWithTimestamp(order.id, OrderStatus.cancelled);
+    } catch (_) {}
+  }
 
   // ─── Logout ───────────────────────────────────────────────────────────────
   Future<void> signOut() async {
