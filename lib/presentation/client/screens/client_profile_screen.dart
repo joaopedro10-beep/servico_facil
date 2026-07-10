@@ -181,7 +181,7 @@ class _PendingDataBanner extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             GestureDetector(
-              onTap: ctrl.startEditing,
+              onTap: () => Get.toNamed(AppRoutes.completeProfile),
               child: const Text('Completar agora →',
                   style: TextStyle(
                       color: AppColors.primary,

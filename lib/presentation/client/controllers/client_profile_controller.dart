@@ -131,12 +131,16 @@ class ClientProfileController extends GetxController {
       final cpfDigits = cpfCtrl.text.replaceAll(RegExp(r'\D'), '');
 
       if (cpfDigits.isNotEmpty) {
-        final inUse = await _isCpfInUse(cpfDigits);
-        if (inUse) {
-          errorMessage.value =
-              'Este CPF já está cadastrado em outra conta. '
-              'Cada CPF permite apenas um cadastro.';
-          return;
+        // Só verifica unicidade se o CPF mudou em relação ao atual
+        final currentCpf = currentUser.value?.cpf ?? '';
+        if (cpfDigits != currentCpf) {
+          final inUse = await _isCpfInUse(cpfDigits);
+          if (inUse) {
+            errorMessage.value =
+                'Este CPF já está cadastrado em outra conta. '
+                'Cada CPF permite apenas um cadastro.';
+            return;
+          }
         }
       }
 
@@ -144,6 +148,7 @@ class ClientProfileController extends GetxController {
         'name': nameCtrl.text.trim(),
         'phone': phoneCtrl.text.trim(),
         if (cpfDigits.isNotEmpty) 'cpf': cpfDigits,
+        'isProfileComplete': true,
       };
 
       await _ds.updateUser(_fb.uid, updates);

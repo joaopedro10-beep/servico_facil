@@ -68,7 +68,8 @@ class CompleteProfileController extends GetxController {
         lat: addressLat.value,
         lng: addressLng.value,
       );
-      Get.offAllNamed(AppRoutes.clientHome);
+      // Navega para tela de sucesso após completar cadastro
+      Get.offAllNamed(AppRoutes.completeProfileSuccess);
     } on AppException catch (e) {
       errorMessage.value = e.message;
     } finally {
