@@ -3,493 +3,362 @@ import 'package:get/get.dart';
 
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_routes.dart';
-import '../../../data/models/worker_model.dart';
-import '../controllers/client_home_controller.dart';
-import '../controllers/client_profile_controller.dart';
-import '../widgets/filter_bottom_sheet.dart';
-import '../widgets/worker_card.dart';
-import '../widgets/worker_shimmer.dart';
-import 'client_profile_screen.dart' show ClientDrawer;
+import '../../../data/repositories/auth_repository_impl.dart';
+import '../controllers/client_controller.dart';
+import 'sections/client_home_section.dart';
+import 'sections/client_search_section.dart';
+import 'sections/client_appointments_section.dart';
+import 'sections/client_messages_section.dart';
+import 'sections/client_profile_section.dart';
 
-// ─── Categorias ───────────────────────────────────────────────────────────────
-
-class _Category {
-  final String label;
-  final IconData icon;
-  const _Category(this.label, this.icon);
+// ─── Cor azul do cliente (conforme imagem: #1565C0) ─────────────────────────
+class CTheme {
+  static const blue       = Color(0xFF1565C0);
+  static const blueDark   = Color(0xFF003c8f);
+  static const blueLight  = Color(0xFFE3F2FD);
+  static const green      = Color(0xFF2E7D32);
+  static const greenLight = Color(0xFF4CAF50);
+  static const red        = Color(0xFFD32F2F);
+  static const amber      = Color(0xFFF9A825);
+  static const card       = Color(0xFFFFFFFF);
+  static const background = Color(0xFFF5F7FA);
+  static const border     = Color(0xFFE0E7EF);
+  static const textDark   = Color(0xFF1A237E);
+  static const textGray   = Color(0xFF546E7A);
+  static const textLight  = Color(0xFF90A4AE);
 }
 
-const _categories = [
-  _Category('Encanador', Icons.water_damage_outlined),
-  _Category('Eletricista', Icons.electrical_services_outlined),
-  _Category('Diarista', Icons.cleaning_services_outlined),
-  _Category('Pintor', Icons.format_paint_outlined),
-  _Category('Jardineiro', Icons.park_outlined),
-  _Category('Montador', Icons.handyman_outlined),
-  _Category('Pedreiro', Icons.construction_outlined),
-  _Category('TI/Suporte', Icons.computer_outlined),
+// ─── Bottom nav items ─────────────────────────────────────────────────────────
+class _NavItem {
+  final IconData icon;
+  final IconData activeIcon;
+  final String label;
+  const _NavItem(this.icon, this.activeIcon, this.label);
+}
+
+const _navItems = [
+  _NavItem(Icons.home_outlined,          Icons.home_rounded,          'Início'),
+  _NavItem(Icons.search_outlined,        Icons.search_rounded,        'Buscar'),
+  _NavItem(Icons.calendar_today_outlined,Icons.calendar_today_rounded,'Agendamentos'),
+  _NavItem(Icons.chat_bubble_outline,    Icons.chat_bubble_rounded,   'Mensagens'),
+  _NavItem(Icons.person_outline_rounded, Icons.person_rounded,        'Perfil'),
 ];
 
-// ─── Screen ───────────────────────────────────────────────────────────────────
-
-class ClientHomeScreen extends StatelessWidget {
+// ─── Root screen ─────────────────────────────────────────────────────────────
+class ClientHomeScreen extends StatefulWidget {
   const ClientHomeScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final ctrl = Get.put(ClientHomeController());
-    final profileCtrl = Get.put(ClientProfileController(), permanent: true);
+  State<ClientHomeScreen> createState() => _ClientHomeScreenState();
+}
 
+class _ClientHomeScreenState extends State<ClientHomeScreen> {
+  final _scaffoldKey = GlobalKey<ScaffoldState>();
+  late final ClientController ctrl;
+  int _navIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    ctrl = Get.put(ClientController());
+  }
+
+  void _openDrawer() => _scaffoldKey.currentState?.openDrawer();
+  void _onNavTap(int i) => setState(() => _navIndex = i);
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
-      drawer: const ClientDrawer(),
+      key: _scaffoldKey,
+      backgroundColor: CTheme.background,
+      drawer: _ClientDrawer(ctrl: ctrl),
       body: SafeArea(
-        child: RefreshIndicator(
-          color: AppColors.primary,
-          onRefresh: () async => ctrl.refresh(),
-          child: CustomScrollView(
-            slivers: [
-              SliverToBoxAdapter(child: _Header(ctrl: ctrl, profileCtrl: profileCtrl)),
-              SliverToBoxAdapter(child: _SearchBar(ctrl: ctrl)),
-              SliverToBoxAdapter(child: _CategoryChips(ctrl: ctrl)),
-              SliverToBoxAdapter(child: _ListHeader(ctrl: ctrl, context: context)),
-              _WorkerList(ctrl: ctrl),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ─── Header ───────────────────────────────────────────────────────────────────
-
-class _Header extends StatelessWidget {
-  final ClientHomeController ctrl;
-  final ClientProfileController profileCtrl;
-  const _Header({required this.ctrl, required this.profileCtrl});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          // Nome do usuário
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Obx(() {
-                  final name = ctrl.currentUser.value?.name ?? '';
-                  final first = name.isNotEmpty ? name.split(' ').first : '';
-                  return Text(
-                    first.isNotEmpty ? 'Olá, $first! 👋' : 'Olá! 👋',
-                    style: const TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textPrimary,
-                    ),
-                  );
-                }),
-                const SizedBox(height: 2),
-                const Text(
-                  'O que você precisa hoje?',
-                  style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
-                ),
-              ],
-            ),
-          ),
-
-          // Badge de notificações
-          Obx(() {
-            final count = ctrl.notificationCount.value;
-            return Stack(
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.notifications_outlined,
-                      size: 26, color: AppColors.textPrimary),
-                  onPressed: () => Get.toNamed(AppRoutes.notifications),
-                ),
-                if (count > 0)
-                  Positioned(
-                    right: 8,
-                    top: 8,
-                    child: Container(
-                      padding: const EdgeInsets.all(3),
-                      decoration: const BoxDecoration(
-                        color: AppColors.error,
-                        shape: BoxShape.circle,
-                      ),
-                      child: Text(
-                        count > 9 ? '9+' : '$count',
-                        style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 9,
-                            fontWeight: FontWeight.w700),
-                      ),
-                    ),
-                  ),
-              ],
-            );
-          }),
-
-          const SizedBox(width: 4),
-
-          // Avatar
-          Builder(
-            builder: (ctx) => GestureDetector(
-              onTap: () => Scaffold.of(ctx).openDrawer(),
-              child: Obx(() {
-                final name = profileCtrl.currentUser.value?.name ?? '';
-                final initial = name.isNotEmpty
-                    ? name.trim()[0].toUpperCase()
-                    : '?';
-                return _Avatar(initial: initial);
-              }),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─── Search Bar ───────────────────────────────────────────────────────────────
-
-class _SearchBar extends StatelessWidget {
-  final ClientHomeController ctrl;
-  const _SearchBar({required this.ctrl});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: TextField(
-        onChanged: ctrl.onSearch,
-        decoration: InputDecoration(
-          hintText: 'Buscar por nome ou serviço...',
-          prefixIcon: const Icon(Icons.search, color: AppColors.textHint),
-          suffixIcon: Obx(() => ctrl.searchQuery.value.isNotEmpty
-              ? IconButton(
-            icon: const Icon(Icons.close,
-                size: 18, color: AppColors.textHint),
-            onPressed: () {
-              ctrl.onSearch('');
-              FocusScope.of(context).unfocus();
-            },
-          )
-              : const SizedBox.shrink()),
-          filled: true,
-          fillColor: Colors.white,
-          contentPadding:
-          const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
-            borderSide: const BorderSide(color: AppColors.border),
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
-            borderSide: const BorderSide(color: AppColors.border),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
-            borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ─── Category Chips ───────────────────────────────────────────────────────────
-
-class _CategoryChips extends StatelessWidget {
-  final ClientHomeController ctrl;
-  const _CategoryChips({required this.ctrl});
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: 52,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        itemCount: _categories.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 8),
-        itemBuilder: (_, i) {
-          final cat = _categories[i];
-          return Obx(() {
-            final selected = ctrl.selectedCategory.value == cat.label;
-            return GestureDetector(
-              onTap: () => ctrl.selectCategory(cat.label),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 180),
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                decoration: BoxDecoration(
-                  color: selected ? AppColors.primary : Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: selected ? AppColors.primary : AppColors.border,
-                  ),
-                  boxShadow: selected
-                      ? [
-                    BoxShadow(
-                        color: AppColors.primary.withOpacity(0.25),
-                        blurRadius: 6,
-                        offset: const Offset(0, 2))
-                  ]
-                      : [],
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(cat.icon,
-                        size: 16,
-                        color:
-                        selected ? Colors.white : AppColors.textSecondary),
-                    const SizedBox(width: 6),
-                    Text(
-                      cat.label,
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: selected ? Colors.white : AppColors.textPrimary,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          });
-        },
-      ),
-    );
-  }
-}
-
-// ─── List Header ─────────────────────────────────────────────────────────────
-
-class _ListHeader extends StatelessWidget {
-  final ClientHomeController ctrl;
-  final BuildContext context;
-  const _ListHeader({required this.ctrl, required this.context});
-
-  @override
-  Widget build(BuildContext _) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
-      child: Obx(() {
-        final count = ctrl.filteredWorkers.length;
-        final hasFilters = ctrl.hasActiveFilters.value;
-        final category = ctrl.selectedCategory.value;
-        return Row(
+        child: IndexedStack(
+          index: _navIndex,
           children: [
-            Text(
-              '$count ${count == 1 ? 'profissional' : 'profissionais'}',
-              style: const TextStyle(
-                  fontSize: 15, fontWeight: FontWeight.w700),
-            ),
-            if (category.isNotEmpty) ...[
-              const SizedBox(width: 6),
-              Text('· $category',
-                  style: const TextStyle(
-                      fontSize: 14, color: AppColors.textSecondary)),
-            ],
-            const Spacer(),
-            GestureDetector(
-              onTap: () => showModalBottomSheet(
-                context: context,
-                isScrollControlled: true,
-                backgroundColor: Colors.transparent,
-                builder: (_) => FilterBottomSheet(controller: ctrl),
-              ),
-              child: Container(
-                padding:
-                const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: hasFilters ? AppColors.primary : Colors.white,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(
-                    color: hasFilters ? AppColors.primary : AppColors.border,
-                  ),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.tune_rounded,
-                        size: 16,
-                        color: hasFilters
-                            ? Colors.white
-                            : AppColors.textSecondary),
-                    const SizedBox(width: 4),
-                    Text('Filtros',
-                        style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: hasFilters
-                                ? Colors.white
-                                : AppColors.textPrimary)),
-                    if (hasFilters) ...[
-                      const SizedBox(width: 4),
-                      Container(
-                        width: 6,
-                        height: 6,
-                        decoration: const BoxDecoration(
-                            color: Colors.white, shape: BoxShape.circle),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ),
+            ClientHomeSection(ctrl: ctrl, onMenuTap: _openDrawer),
+            ClientSearchSection(ctrl: ctrl),
+            ClientAppointmentsSection(ctrl: ctrl),
+            ClientMessagesSection(ctrl: ctrl),
+            ClientProfileSection(ctrl: ctrl),
           ],
-        );
-      }),
+        ),
+      ),
+      bottomNavigationBar: _ClientBottomNav(
+        currentIndex: _navIndex,
+        onTap: _onNavTap,
+        ctrl: ctrl,
+      ),
     );
   }
 }
 
-// ─── Worker List ──────────────────────────────────────────────────────────────
-
-class _WorkerList extends StatelessWidget {
-  final ClientHomeController ctrl;
-  const _WorkerList({required this.ctrl});
-
-  @override
-  Widget build(BuildContext context) {
-    return Obx(() {
-      if (ctrl.isLoadingWorkers.value) {
-        return const SliverToBoxAdapter(
-          child: WorkerListShimmer(count: 5),
-        );
-      }
-
-      final workers = ctrl.filteredWorkers;
-
-      if (workers.isEmpty) {
-        return SliverFillRemaining(
-          child: _EmptyState(ctrl: ctrl),
-        );
-      }
-
-      return SliverList(
-        delegate: SliverChildBuilderDelegate(
-              (_, i) {
-            final w = workers[i];
-            return WorkerCard(
-              worker: w,
-              distanceKm: ctrl.distanceToWorker(w),
-              onTap: () => Get.toNamed(AppRoutes.workerProfile, arguments: w),
-            );
-          },
-          childCount: workers.length,
-        ),
-      );
-    });
-  }
-}
-
-// ─── Empty State ──────────────────────────────────────────────────────────────
-
-class _EmptyState extends StatelessWidget {
-  final ClientHomeController ctrl;
-  const _EmptyState({required this.ctrl});
-
-  @override
-  Widget build(BuildContext context) {
-    return Obx(() {
-      final hasSearch = ctrl.searchQuery.value.isNotEmpty;
-      final hasCat = ctrl.selectedCategory.value.isNotEmpty;
-      final hasFilters = ctrl.hasActiveFilters.value;
-
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(24),
-                decoration: BoxDecoration(
-                  color: AppColors.primary.withOpacity(0.08),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.search_off_rounded,
-                    size: 64, color: AppColors.primary),
-              ),
-              const SizedBox(height: 20),
-              Text(
-                hasSearch || hasCat
-                    ? 'Nenhum profissional encontrado'
-                    : 'Nenhum profissional disponível',
-                style: const TextStyle(
-                    fontSize: 17, fontWeight: FontWeight.w700),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                hasSearch
-                    ? 'Tente outro nome ou categoria.'
-                    : hasCat
-                    ? 'Não há ${ctrl.selectedCategory.value.toLowerCase()} disponível agora.'
-                    : 'Novos profissionais se cadastram todos os dias. Volte em breve!',
-                style: const TextStyle(
-                    color: AppColors.textSecondary, height: 1.5),
-                textAlign: TextAlign.center,
-              ),
-              if (hasSearch || hasCat || hasFilters) ...[
-                const SizedBox(height: 24),
-                OutlinedButton.icon(
-                  onPressed: () {
-                    ctrl.onSearch('');
-                    ctrl.selectCategory('');
-                    ctrl.resetFilters();
-                  },
-                  icon: const Icon(Icons.refresh),
-                  label: const Text('Limpar filtros'),
-                ),
-              ],
-            ],
-          ),
-        ),
-      );
-    });
-  }
-}
-
-// ─── Avatar ───────────────────────────────────────────────────────────────────
-
-class _Avatar extends StatelessWidget {
-  final String initial;
-  const _Avatar({required this.initial});
+// ─── Bottom Nav ───────────────────────────────────────────────────────────────
+class _ClientBottomNav extends StatelessWidget {
+  final int currentIndex;
+  final ValueChanged<int> onTap;
+  final ClientController ctrl;
+  const _ClientBottomNav({
+    required this.currentIndex,
+    required this.onTap,
+    required this.ctrl,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 44,
-      height: 44,
-      decoration: BoxDecoration(
-        color: AppColors.primary,
-        shape: BoxShape.circle,
+      decoration: const BoxDecoration(
+        color: CTheme.card,
+        border: Border(top: BorderSide(color: CTheme.border)),
         boxShadow: [
-          BoxShadow(
-            color: AppColors.primary.withOpacity(0.25),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
-          ),
+          BoxShadow(color: Color(0x14000000), blurRadius: 8, offset: Offset(0, -2)),
         ],
       ),
-      child: Center(
-        child: Text(
-          initial,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 18,
-            fontWeight: FontWeight.w700,
+      child: SafeArea(
+        top: false,
+        child: SizedBox(
+          height: 58,
+          child: Row(
+            children: _navItems.asMap().entries.map((e) {
+              final i = e.key;
+              final item = e.value;
+              final sel = currentIndex == i;
+
+              Widget iconW;
+              if (i == 3) {
+                // Badge mensagens
+                iconW = Obx(() {
+                  final count = ctrl.notificationCount.value;
+                  return Stack(clipBehavior: Clip.none, children: [
+                    Icon(sel ? item.activeIcon : item.icon,
+                        color: sel ? CTheme.blue : CTheme.textLight, size: 22),
+                    if (count > 0)
+                      Positioned(
+                        right: -4, top: -4,
+                        child: Container(
+                          width: 14, height: 14,
+                          decoration: const BoxDecoration(
+                              color: CTheme.red, shape: BoxShape.circle),
+                          child: Center(
+                            child: Text('$count',
+                                style: const TextStyle(
+                                    color: Colors.white, fontSize: 8,
+                                    fontWeight: FontWeight.w800)),
+                          ),
+                        ),
+                      ),
+                  ]);
+                });
+              } else {
+                iconW = Icon(sel ? item.activeIcon : item.icon,
+                    color: sel ? CTheme.blue : CTheme.textLight, size: 22);
+              }
+
+              return Expanded(
+                child: GestureDetector(
+                  onTap: () => onTap(i),
+                  behavior: HitTestBehavior.opaque,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      iconW,
+                      const SizedBox(height: 3),
+                      Text(item.label,
+                          style: TextStyle(
+                              fontSize: 10,
+                              color: sel ? CTheme.blue : CTheme.textLight,
+                              fontWeight: sel ? FontWeight.w700 : FontWeight.w400),
+                          overflow: TextOverflow.ellipsis, maxLines: 1),
+                    ],
+                  ),
+                ),
+              );
+            }).toList(),
           ),
         ),
+      ),
+    );
+  }
+}
+
+// ─── Drawer lateral ───────────────────────────────────────────────────────────
+class _ClientDrawer extends StatelessWidget {
+  final ClientController ctrl;
+  const _ClientDrawer({required this.ctrl});
+
+  @override
+  Widget build(BuildContext context) {
+    return Drawer(
+      width: 280,
+      backgroundColor: Colors.white,
+      child: Column(children: [
+        _DrawerHeader(ctrl: ctrl),
+        Expanded(
+          child: ListView(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            children: [
+              _DItem(Icons.home_rounded,            'Início',           () => _nav(context, 0)),
+              _DItem(Icons.receipt_long_rounded,    'Solicitar Serviço',() => Get.back()),
+              _DItem(Icons.calendar_today_rounded,  'Meus Agendamentos',() => _nav(context, 2)),
+              _DItem(Icons.history_rounded,         'Histórico',        () => Get.back()),
+              _DItem(Icons.favorite_rounded,        'Favoritos',        () => Get.back()),
+              _DItem(Icons.chat_bubble_rounded,     'Mensagens',        () => _nav(context, 3),
+                  badge: ctrl.notificationCount.value),
+              _DItem(Icons.payment_rounded,         'Pagamentos',       () => Get.back()),
+              _DItem(Icons.discount_rounded,        'Cupons',           () => Get.back()),
+              _DItem(Icons.star_rounded,            'Avaliações',       () => Get.back()),
+              _DItem(Icons.notifications_rounded,   'Notificações',     () => Get.back()),
+              _DItem(Icons.settings_rounded,        'Configurações',    () => Get.back()),
+              _DItem(Icons.help_rounded,            'Ajuda',            () => Get.back()),
+              const Divider(indent: 16, endIndent: 16, height: 20),
+              _DItem(Icons.logout_rounded,          'Sair',             ctrl.signOut,
+                  color: CTheme.red),
+            ],
+          ),
+        ),
+      ]),
+    );
+  }
+
+  void _nav(BuildContext ctx, int i) {
+    Navigator.of(ctx).pop();
+    // The parent StatefulWidget handles tab switching via setState
+    // We use a simple approach: close drawer, the user sees current state
+  }
+}
+
+class _DrawerHeader extends StatelessWidget {
+  final ClientController ctrl;
+  const _DrawerHeader({required this.ctrl});
+
+  @override
+  Widget build(BuildContext context) {
+    return Obx(() {
+      final u = ctrl.currentUser.value;
+      final name = u?.name ?? ctrl.firstName;
+      final email = u?.email ?? '';
+      final phone = u?.phone ?? '';
+      final initial = ctrl.nameInitial;
+
+      return Container(
+        width: double.infinity,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [CTheme.blue, CTheme.blueDark],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+        ),
+        padding: const EdgeInsets.fromLTRB(20, 48, 20, 20),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            CircleAvatar(
+              radius: 34,
+              backgroundColor: Colors.white.withOpacity(0.25),
+              backgroundImage: u?.photoUrl != null
+                  ? NetworkImage(u!.photoUrl!)
+                  : null,
+              child: u?.photoUrl == null
+                  ? Text(initial,
+                      style: const TextStyle(
+                          color: Colors.white, fontSize: 26,
+                          fontWeight: FontWeight.w800))
+                  : null,
+            ),
+            const Spacer(),
+            GestureDetector(
+              onTap: () => Navigator.of(context).pop(),
+              child: Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.close_rounded,
+                    color: Colors.white70, size: 18),
+              ),
+            ),
+          ]),
+          const SizedBox(height: 12),
+          Text(name,
+              style: const TextStyle(
+                  color: Colors.white, fontSize: 17, fontWeight: FontWeight.w700),
+              maxLines: 1, overflow: TextOverflow.ellipsis),
+          if (email.isNotEmpty) ...[
+            const SizedBox(height: 2),
+            Text(email,
+                style: const TextStyle(color: Colors.white70, fontSize: 12),
+                maxLines: 1, overflow: TextOverflow.ellipsis),
+          ],
+          if (phone.isNotEmpty) ...[
+            const SizedBox(height: 2),
+            Text(phone,
+                style: const TextStyle(color: Colors.white70, fontSize: 12)),
+          ],
+          const SizedBox(height: 10),
+          GestureDetector(
+            onTap: () {
+              Navigator.of(context).pop();
+              Get.toNamed(AppRoutes.clientProfile);
+            },
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 9),
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.white.withOpacity(0.5)),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Center(
+                child: Text('Editar perfil',
+                    style: TextStyle(
+                        color: Colors.white, fontSize: 13,
+                        fontWeight: FontWeight.w600)),
+              ),
+            ),
+          ),
+        ]),
+      );
+    });
+  }
+}
+
+class _DItem extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final Color? color;
+  final int badge;
+  const _DItem(this.icon, this.label, this.onTap,
+      {this.color, this.badge = 0});
+
+  @override
+  Widget build(BuildContext context) {
+    final c = color ?? CTheme.textGray;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        child: Row(children: [
+          Icon(icon, color: c, size: 20),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Text(label,
+                style: TextStyle(fontSize: 14, color: c),
+                overflow: TextOverflow.ellipsis, maxLines: 1),
+          ),
+          if (badge > 0)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+              decoration: BoxDecoration(
+                  color: CTheme.red, borderRadius: BorderRadius.circular(10)),
+              child: Text('$badge',
+                  style: const TextStyle(
+                      color: Colors.white, fontSize: 11,
+                      fontWeight: FontWeight.w700)),
+            ),
+        ]),
       ),
     );
   }
