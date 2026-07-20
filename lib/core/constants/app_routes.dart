@@ -38,6 +38,12 @@ class AppRoutes {
   static const block = '/block';
   static const reviews = '/reviews';
 
+  // Worker — telas dedicadas (drawer)
+  static const workerClients  = '/worker/clients';
+  static const workerReports  = '/worker/reports';
+  static const workerFinancial = '/worker/financial';
+  static const workerSettings = '/worker/settings';
+
   // Admin
   static const adminHome = '/admin/home';
 
