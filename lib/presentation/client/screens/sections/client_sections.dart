@@ -190,7 +190,7 @@ class _AppointmentCard extends StatelessWidget {
                     ),
                     const SizedBox(width: 8),
                     Expanded(
-                      child: Text(fmt.format(order.scheduledAt),
+                      child: Text(order.scheduledAt != null ? fmt.format(order.scheduledAt!) : 'Aguardando agendamento',
                           style: const TextStyle(
                               fontSize: 11, color: CTheme.textGray),
                           overflow: TextOverflow.ellipsis, maxLines: 1),
