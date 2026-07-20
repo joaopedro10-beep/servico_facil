@@ -124,17 +124,19 @@ class _WorkerCard extends StatelessWidget {
 
   Color get _statusColor {
     switch (worker.verificationStatus) {
-      case VerificationStatus.pending:  return AdminTheme.amber;
-      case VerificationStatus.approved: return AdminTheme.green;
-      case VerificationStatus.rejected: return AdminTheme.red;
+      case VerificationStatus.pending:           return AdminTheme.amber;
+      case VerificationStatus.approved:          return AdminTheme.green;
+      case VerificationStatus.rejected:          return AdminTheme.red;
+      case VerificationStatus.documentsRequired: return AdminTheme.amber;
     }
   }
 
   String get _statusLabel {
     switch (worker.verificationStatus) {
-      case VerificationStatus.pending:  return 'Pendente';
-      case VerificationStatus.approved: return 'Aprovado';
-      case VerificationStatus.rejected: return 'Rejeitado';
+      case VerificationStatus.pending:           return 'Pendente';
+      case VerificationStatus.approved:          return 'Aprovado';
+      case VerificationStatus.rejected:          return 'Rejeitado';
+      case VerificationStatus.documentsRequired: return 'Docs inválidos';
     }
   }
 
