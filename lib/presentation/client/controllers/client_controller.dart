@@ -59,7 +59,6 @@ class ClientController extends GetxController {
 
   // Campos do formulário
   final descriptionCtrl  = TextEditingController();
-  final scheduledDate    = Rxn<DateTime>();
   final photoFiles       = <File>[].obs;
   final serviceAddress   = Rxn<UserAddress>();
 
@@ -162,10 +161,10 @@ class ClientController extends GetxController {
   void clearForm() {
     selectedCategory.value = '';
     descriptionCtrl.clear();
-    scheduledDate.value = null;
     photoFiles.clear();
-    submitError.value = '';
+    submitError.value   = '';
     submitSuccess.value = false;
+    // Mantém o endereço do perfil como padrão
     serviceAddress.value = currentUser.value?.address;
   }
 
@@ -196,10 +195,6 @@ class ClientController extends GetxController {
       submitError.value = 'Descreva o serviço que precisa.';
       return;
     }
-    if (scheduledDate.value == null) {
-      submitError.value = 'Informe a data e horário desejado.';
-      return;
-    }
     if (serviceAddress.value == null ||
         serviceAddress.value!.city.isEmpty) {
       submitError.value = 'Informe o endereço do serviço.';
@@ -218,10 +213,9 @@ class ClientController extends GetxController {
       final order = OrderModel(
         id:              '',
         userId:          _fb.uid,
-        workerId:        '', // vazio até aceite
         serviceCategory: selectedCategory.value,
         description:     descriptionCtrl.text.trim(),
-        scheduledAt:     scheduledDate.value!,
+        // workerId, scheduledAt e workerName ficam null — preenchidos pelo prestador
         status:          OrderStatus.pending,
         address:         serviceAddress.value!,
         createdAt:       now,
