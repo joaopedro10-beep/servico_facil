@@ -86,14 +86,8 @@ class WorkerHomeController extends GetxController {
 
 
   void _startReviewsStream() {
-    _reviewsSub = _fb.reviewsRef
-        .where('targetId', isEqualTo: _fb.uid)
-        .orderBy('createdAt', descending: true)
-        .snapshots()
-        .listen((snap) {
-      workerReviews.assignAll(
-        snap.docs.map((d) => ReviewModel.fromMap(d.data(), d.id)).toList(),
-      );
+    _reviewsSub = _ds.watchReviews(_fb.uid).listen((list) {
+      workerReviews.assignAll(list);
     });
   }
 
