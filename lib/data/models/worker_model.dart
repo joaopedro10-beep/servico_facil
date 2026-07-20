@@ -2,7 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:equatable/equatable.dart';
 import 'user_address.dart';
 
-enum VerificationStatus { pending, approved, rejected }
+enum VerificationStatus { pending, approved, rejected, documentsRequired }
 
 class WorkerModel extends Equatable {
   final String id;
@@ -11,6 +11,7 @@ class WorkerModel extends Equatable {
   final String phone;
   final String? photoUrl;
   final List<String> categories;
+  final List<String> activeCategories; // serviços habilitados para receber chamadas
   final String description;
   final UserAddress address;
   final double pricePerHour;
@@ -37,6 +38,7 @@ class WorkerModel extends Equatable {
     required this.phone,
     this.photoUrl,
     required this.categories,
+    this.activeCategories = const [],
     required this.description,
     required this.address,
     required this.pricePerHour,
@@ -71,6 +73,7 @@ class WorkerModel extends Equatable {
       phone: map['phone'] ?? '',
       photoUrl: map['photoUrl'],
       categories: List<String>.from(map['categories'] ?? []),
+      activeCategories: List<String>.from(map['activeCategories'] ?? map['categories'] ?? []),
       description: map['description'] ?? '',
       address: UserAddress.fromMap(
         map['address'] ?? {},
@@ -80,7 +83,7 @@ class WorkerModel extends Equatable {
       totalReviews: map['totalReviews'] ?? 0,
       isVerified: map['isVerified'] ?? false,
       verificationStatus: VerificationStatus.values.firstWhere(
-        (e) => e.name == (map['verificationStatus'] ?? 'pending'),
+            (e) => e.name == (map['verificationStatus'] ?? 'pending'),
         orElse: () => VerificationStatus.pending,
       ),
       isAvailable: map['isAvailable'] ?? true,
@@ -120,6 +123,7 @@ class WorkerModel extends Equatable {
     String? phone,
     String? photoUrl,
     List<String>? categories,
+    List<String>? activeCategories,
     String? description,
     UserAddress? address,
     double? pricePerHour,
@@ -140,6 +144,7 @@ class WorkerModel extends Equatable {
       phone: phone ?? this.phone,
       photoUrl: photoUrl ?? this.photoUrl,
       categories: categories ?? this.categories,
+      activeCategories: activeCategories ?? this.activeCategories,
       description: description ?? this.description,
       address: address ?? this.address,
       pricePerHour: pricePerHour ?? this.pricePerHour,
