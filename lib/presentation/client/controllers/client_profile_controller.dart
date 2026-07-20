@@ -113,11 +113,7 @@ class ClientProfileController extends GetxController {
 
   // ─── Validação de CPF único ───────────────────────────────────────────────
   Future<bool> _isCpfInUse(String cpf) async {
-    final query = await _fb.usersRef
-        .where('cpf', isEqualTo: cpf)
-        .limit(2)
-        .get();
-    return query.docs.any((d) => d.id != _fb.uid);
+    return _ds.isCpfInUse(cpf, _fb.uid);
   }
 
   // ─── Salvar ───────────────────────────────────────────────────────────────
