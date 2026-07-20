@@ -31,6 +31,7 @@ class _WorkerAgendaSectionState extends State<WorkerAgendaSection> {
   List<OrderModel> _ordersForDay(DateTime day, List<OrderModel> all) {
     return all.where((o) {
       final d = o.scheduledAt;
+      if (d == null) return false;
       return d.year == day.year &&
           d.month == day.month &&
           d.day == day.day;
@@ -106,11 +107,13 @@ class _CalendarCard extends StatelessWidget {
   });
 
   bool _hasOrder(DateTime day) => orders.any((o) {
-        final d = o.scheduledAt;
-        return d.year == day.year &&
-            d.month == day.month &&
-            d.day == day.day;
-      });
+    final d = o.scheduledAt;
+    if (d == null) return false;
+    return d.year == day.year &&
+        d.month == day.month &&
+        d.day == day.day;
+  });
+
 
   bool _isToday(DateTime day) {
     final n = DateTime.now();
@@ -322,7 +325,7 @@ class _AgendaItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final time =
-        DateFormat('HH:mm').format(order.scheduledAt);
+        DateFormat('HH:mm').format(order.scheduledAt ?? DateTime.now());
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
