@@ -247,13 +247,15 @@ class OrderController extends GetxController {
       await _ds.updateOrderStatusWithTimestamp(
           order.id, OrderStatus.cancelled);
 
-      await _ds.saveNotification(
-        targetUserId: order.workerId,
-        title: 'Pedido cancelado',
-        body: 'O cliente cancelou a solicitação de ${order.serviceCategory}.',
-        type: 'order_update',
-        targetId: order.id,
-      );
+      if (order.workerId != null && order.workerId!.isNotEmpty) {
+        await _ds.saveNotification(
+          targetUserId: order.workerId!,
+          title: 'Pedido cancelado',
+          body: 'O cliente cancelou a solicitação de ${order.serviceCategory}.',
+          type: 'order_update',
+          targetId: order.id,
+        );
+      }
     } catch (_) {
       Get.snackbar('Erro', 'Não foi possível cancelar.',
           backgroundColor: Colors.red, colorText: Colors.white);
@@ -293,6 +295,32 @@ class OrderController extends GetxController {
         notifyBody:
             'Que tal avaliar o profissional? Sua opinião ajuda outros clientes.',
       );
+
+  /// Agendamento pelo prestador: salva scheduledAt como Timestamp, notifica cliente.
+  Future<void> scheduleOrder(DateTime scheduledAt) async {
+    final order = currentOrder.value;
+    if (order == null) return;
+    isSaving.value = true;
+    try {
+      final day    = scheduledAt.day.toString().padLeft(2, '0');
+      final month  = scheduledAt.month.toString().padLeft(2, '0');
+      final hour   = scheduledAt.hour.toString().padLeft(2, '0');
+      final minute = scheduledAt.minute.toString().padLeft(2, '0');
+
+      await _ds.updateOrderSchedule(order.id, scheduledAt);
+      await _ds.saveNotification(
+        targetUserId: order.userId,
+        title: 'Servico agendado!',
+        body: 'Seu pedido de ' + order.serviceCategory +
+              ' foi agendado para $day/$month as $hour:$minute.',
+        type: 'order_scheduled',
+        targetId: order.id,
+      );
+    } catch (_) {
+    } finally {
+      isSaving.value = false;
+    }
+  }
 
   Future<void> _changeStatus(
     OrderStatus newStatus, {
