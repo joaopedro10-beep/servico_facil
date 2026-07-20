@@ -9,6 +9,12 @@ import 'sections/worker_dashboard_section.dart';
 import 'sections/worker_requests_section.dart';
 import 'sections/worker_agenda_section.dart';
 import 'sections/worker_earnings_section.dart';
+import 'sections/worker_services_section.dart';
+import 'sections/worker_reports_section.dart';
+import 'sections/worker_clients_section.dart';
+import 'sections/worker_reviews_section.dart';
+import 'sections/worker_financial_section.dart';
+import 'sections/worker_settings_section.dart';
 import 'sections/worker_profile_section.dart';
 
 // ─── Cor azul do tema do prestador ───────────────────────────────────────────
@@ -46,12 +52,14 @@ class _NavItem {
   const _NavItem(this.icon, this.activeIcon, this.label);
 }
 
-// 4 abas — Perfil fica no Drawer lateral (sem aba Perfil no BottomNav)
+// 6 abas: Dashboard, Solicitações, Agenda, Serviços, Ganhos, Perfil
 const _navItems = [
-  _NavItem(Icons.home_outlined,          Icons.home_rounded,          'Início'),
-  _NavItem(Icons.receipt_long_outlined,  Icons.receipt_long_rounded,  'Solicitações'),
-  _NavItem(Icons.calendar_today_outlined,Icons.calendar_today_rounded,'Agenda'),
-  _NavItem(Icons.account_balance_wallet_outlined,Icons.account_balance_wallet_rounded,'Ganhos'),
+  _NavItem(Icons.home_outlined,               Icons.home_rounded,               'Início'),
+  _NavItem(Icons.receipt_long_outlined,       Icons.receipt_long_rounded,       'Solicitações'),
+  _NavItem(Icons.calendar_today_outlined,     Icons.calendar_today_rounded,     'Agenda'),
+  _NavItem(Icons.edit_outlined,               Icons.edit_rounded,               'Serviços'),
+  _NavItem(Icons.account_balance_wallet_outlined, Icons.account_balance_wallet_rounded, 'Ganhos'),
+  _NavItem(Icons.person_outline_rounded,      Icons.person_rounded,             'Perfil'),
 ];
 
 // ─── Root ─────────────────────────────────────────────────────────────────────
@@ -81,7 +89,7 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
     return Scaffold(
       key: _scaffoldKey,
       backgroundColor: WTheme.background,
-      drawer: _WorkerDrawer(ctrl: ctrl),
+      drawer: _WorkerDrawer(ctrl: ctrl, onTabSwitch: _onNavTap),
       body: SafeArea(
         child: IndexedStack(
           index: _navIndex,
@@ -89,8 +97,9 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
             WorkerDashboardSection(ctrl: ctrl, onMenuTap: _openDrawer),
             WorkerRequestsSection(ctrl: ctrl),
             WorkerAgendaSection(ctrl: ctrl),
+            WorkerServicesSection(ctrl: ctrl),
             WorkerEarningsSection(ctrl: ctrl),
-            // Perfil acessível pelo Drawer lateral
+            WorkerProfileSection(ctrl: ctrl), // índice 5 — Perfil
           ],
         ),
       ),
@@ -205,7 +214,8 @@ class _WorkerBottomNav extends StatelessWidget {
 // ─── Drawer lateral ───────────────────────────────────────────────────────────
 class _WorkerDrawer extends StatelessWidget {
   final WorkerController ctrl;
-  const _WorkerDrawer({required this.ctrl});
+  final void Function(int) onTabSwitch;
+  const _WorkerDrawer({required this.ctrl, required this.onTabSwitch});
 
   @override
   Widget build(BuildContext context) {
@@ -221,18 +231,45 @@ class _WorkerDrawer extends StatelessWidget {
           child: ListView(
             padding: const EdgeInsets.symmetric(vertical: 8),
             children: [
-              _DrawerItem(Icons.dashboard_rounded,     'Dashboard',          () { Get.back(); }),
-              _DrawerItem(Icons.receipt_long_rounded,  'Solicitações',       () { Get.back(); }),
-              _DrawerItem(Icons.engineering_rounded,   'Serviços em andamento', () { Get.back(); }),
-              _DrawerItem(Icons.calendar_today_rounded,'Agenda',             () { Get.back(); }),
-              _DrawerItem(Icons.history_rounded,       'Histórico',          () { Get.back(); }),
-              _DrawerItem(Icons.people_rounded,        'Clientes',           () { Get.back(); }),
-              _DrawerItem(Icons.star_rounded,          'Avaliações',         () { Get.back(); }),
-              _DrawerItem(Icons.account_balance_wallet_rounded, 'Ganhos',   () { Get.back(); }),
-              _DrawerItem(Icons.credit_card_rounded,   'Carteira',           () { Get.back(); }),
-              _DrawerItem(Icons.notifications_rounded, 'Notificações',       () { Get.back(); }),
-              _DrawerItem(Icons.settings_rounded,      'Configurações',      () { Get.back(); }),
-              _DrawerItem(Icons.help_rounded,          'Ajuda',              () { Get.back(); }),
+              _DrawerItem(Icons.dashboard_rounded, 'Dashboard', () {
+                Navigator.of(context).pop();
+                onTabSwitch(0); // aba Dashboard
+              }),
+              _DrawerItem(Icons.receipt_long_rounded, 'Pedidos disponíveis', () {
+                Navigator.of(context).pop();
+                onTabSwitch(1); // aba Solicitações
+              }),
+              _DrawerItem(Icons.engineering_rounded, 'Serviços em andamento', () {
+                Navigator.of(context).pop();
+                onTabSwitch(2); // aba Agenda/Em andamento
+              }),
+              _DrawerItem(Icons.people_rounded, 'Clientes', () {
+                Navigator.of(context).pop();
+                Get.toNamed(AppRoutes.workerClients);
+              }),
+              _DrawerItem(Icons.bar_chart_rounded, 'Relatórios', () {
+                Navigator.of(context).pop();
+                Get.toNamed(AppRoutes.workerReports);
+              }),
+              _DrawerItem(Icons.star_rounded, 'Avaliações', () {
+                Navigator.of(context).pop();
+                Get.toNamed(AppRoutes.workerReviews);
+              }),
+              _DrawerItem(Icons.account_balance_wallet_rounded, 'Financeiro', () {
+                Navigator.of(context).pop();
+                Get.toNamed(AppRoutes.workerFinancial);
+              }),
+              _DrawerItem(Icons.person_rounded, 'Perfil', () {
+                Navigator.of(context).pop();
+                onTabSwitch(5); // aba Perfil
+              }),
+              _DrawerItem(Icons.settings_rounded, 'Configurações', () {
+                Navigator.of(context).pop();
+                Get.toNamed(AppRoutes.workerSettings);
+              }),
+              _DrawerItem(Icons.help_rounded, 'Ajuda', () {
+                Navigator.of(context).pop();
+              }),
               const Divider(indent: 16, endIndent: 16, height: 20),
               _DrawerItem(Icons.logout_rounded, 'Sair',
                   () async {
