@@ -126,7 +126,7 @@ class ReviewController extends GetxController {
         authorId: uid,
         authorName: authorName,
         authorPhotoUrl: authorPhoto,
-        targetId: targetId,
+        targetId: targetId ?? '',
         rating: selectedRating.value.toDouble(),
         comment: commentCtrl.text.trim().isEmpty
             ? null
@@ -139,10 +139,10 @@ class ReviewController extends GetxController {
 
       // Se novo rating ficou abaixo de 2.5, notifica o worker
       if (!ratingAsWorker && selectedRating.value <= 2) {
-        final w = await _ds.getWorker(targetId);
+        final w = await _ds.getWorker(targetId ?? '');
         if (w != null && w.avgRating < 2.5) {
           await _ds.saveNotification(
-            targetUserId: targetId,
+            targetUserId: targetId ?? '',
             title: 'Sua disponibilidade foi pausada',
             body:
                 'Sua avaliação média ficou abaixo de 2.5. Complete mais serviços para reativar.',
