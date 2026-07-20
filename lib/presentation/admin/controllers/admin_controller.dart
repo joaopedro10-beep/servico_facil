@@ -7,6 +7,7 @@ import '../../../core/constants/app_routes.dart';
 import '../../../core/errors/app_exceptions.dart';
 import '../../../core/services/firebase_service.dart';
 import '../../../data/datasources/admin_datasource.dart';
+import '../../../data/datasources/firestore_datasource.dart';
 import '../../../data/models/admin_log_model.dart';
 import '../../../data/models/order_model.dart';
 import '../../../data/models/report_model.dart';
@@ -14,9 +15,11 @@ import '../../../data/models/review_model.dart';
 import '../../../data/models/user_model.dart';
 import '../../../data/models/worker_model.dart';
 
+
 class AdminController extends GetxController {
-  final AdminDatasource _ds = Get.find<AdminDatasource>();
-  final FirebaseService _fb = Get.find<FirebaseService>();
+  final AdminDatasource _ds   = Get.find<AdminDatasource>();
+  final FirestoreDatasource _fds = Get.find<FirestoreDatasource>();
+  final FirebaseService _fb  = Get.find<FirebaseService>();
 
   // ─── Navegação entre seções ───────────────────────────────────────────────
   final currentSection = 0.obs;
@@ -88,12 +91,9 @@ class AdminController extends GetxController {
 
   Future<void> _loadAdminInfo() async {
     try {
-      final uid = _fb.uid;
-      // O admin pode estar em users ou ser um usuário especial
-      final doc = await _fb.usersRef.doc(uid).get();
-      if (doc.exists) {
-        adminName.value = doc.data()?['name'] ?? 'Admin';
-      }
+      final uid  = _fb.uid;
+      final name = await _fds.getUserName(uid);
+      adminName.value = name ?? 'Admin';
     } catch (_) {}
   }
 
@@ -115,19 +115,19 @@ class AdminController extends GetxController {
 
   void _subscribePendingWorkers() {
     _subs.add(_ds.watchPendingWorkers().listen(
-      (list) => pendingWorkers.assignAll(list),
+          (list) => pendingWorkers.assignAll(list),
     ));
   }
 
   void _subscribeAllWorkers() {
     _subs.add(_ds.watchAllWorkers().listen(
-      (list) => allWorkers.assignAll(list),
+          (list) => allWorkers.assignAll(list),
     ));
   }
 
   void _subscribeUsers() {
     _subs.add(_ds.watchAllUsers().listen(
-      (list) {
+          (list) {
         allUsers.assignAll(list);
         if (userSearchQuery.value.isEmpty) {
           userSearchResults.assignAll(list);
@@ -138,28 +138,28 @@ class AdminController extends GetxController {
 
   void _subscribeOrders() {
     _subs.add(_ds.watchAllOrders().listen(
-      (list) => allOrders.assignAll(list),
+          (list) => allOrders.assignAll(list),
     ));
   }
 
   void _subscribeReports() {
     _subs.add(_ds.watchOpenReports().listen(
-      (list) => openReports.assignAll(list),
+          (list) => openReports.assignAll(list),
     ));
     _subs.add(_ds.watchAllReports().listen(
-      (list) => allReports.assignAll(list),
+          (list) => allReports.assignAll(list),
     ));
   }
 
   void _subscribeReviews() {
     _subs.add(_ds.watchAllReviews().listen(
-      (list) => allReviews.assignAll(list),
+          (list) => allReviews.assignAll(list),
     ));
   }
 
   void _subscribeLogs() {
     _subs.add(_ds.watchAdminLogs().listen(
-      (list) => adminLogs.assignAll(list),
+          (list) => adminLogs.assignAll(list),
     ));
   }
 
@@ -172,7 +172,7 @@ class AdminController extends GetxController {
     final confirm = await _confirmDialog(
       title: 'Aprovar prestador',
       content:
-          'Deseja aprovar ${worker.name}? Ele passará a aparecer nas buscas e poderá receber solicitações.',
+      'Deseja aprovar ${worker.name}? Ele passará a aparecer nas buscas e poderá receber solicitações.',
       confirmLabel: 'Aprovar',
       confirmColor: Colors.green,
     );
@@ -220,7 +220,7 @@ class AdminController extends GetxController {
     }
   }
 
-  Future<void> requestDocuments(WorkerModel worker) async {
+  Future<void> requestDocuments(WorkerModel worker, {String? reason}) async {
     final message = await _reasonDialog(
       title: 'Solicitar documentos',
       hint: 'O que está faltando ou precisa ser corrigido?',
@@ -229,7 +229,14 @@ class AdminController extends GetxController {
 
     _setLoading(true);
     try {
-      await _ds.requestMoreDocuments(worker.id, message);
+      // Notifica o prestador que precisa reenviar documentos
+      await _fds.saveNotification(
+        targetUserId: worker.id,
+        title: 'Documentos inválidos — reenvio necessário',
+        body: message.isNotEmpty ? message : 'Seus documentos não estão legíveis. Acesse o app e reenvie.',
+        type: 'documents_required',
+        targetId: worker.id,
+      );
       await _logAction(
         action: AdminActionType.requestDocuments,
         targetId: worker.id,
@@ -254,7 +261,7 @@ class AdminController extends GetxController {
     }
     final q = query.toLowerCase();
     userSearchResults.assignAll(allUsers.where((u) =>
-        u.name.toLowerCase().contains(q) ||
+    u.name.toLowerCase().contains(q) ||
         u.email.toLowerCase().contains(q) ||
         (u.cpf ?? '').contains(q)));
   }
@@ -308,7 +315,7 @@ class AdminController extends GetxController {
     final confirm = await _confirmDialog(
       title: 'Confirmar banimento',
       content:
-          'Essa ação é permanente. ${user.name} será banido da plataforma.',
+      'Essa ação é permanente. ${user.name} será banido da plataforma.',
       confirmLabel: 'Banir',
       confirmColor: Colors.red,
     );
@@ -416,7 +423,7 @@ class AdminController extends GetxController {
     final confirm = await _confirmDialog(
       title: 'Remover avaliação',
       content:
-          'Deseja remover esta avaliação de ${review.authorName}? Essa ação não pode ser desfeita.',
+      'Deseja remover esta avaliação de ${review.authorName}? Essa ação não pode ser desfeita.',
       confirmLabel: 'Remover',
       confirmColor: Colors.red,
     );
@@ -472,6 +479,26 @@ class AdminController extends GetxController {
     }
     searchUsers(query);
     currentSection.value = 3;
+  }
+
+
+  // 1.2: Monitora novos prestadores pendentes e notifica o admin
+  void _watchForNewPending() {
+    int _lastCount = pendingWorkers.length;
+    ever(pendingWorkers, (list) {
+      if (list.length > _lastCount && _lastCount >= 0) {
+        Get.snackbar(
+          'Nova solicitação de cadastro',
+          'Um prestador aguarda aprovação de documentos.',
+          snackPosition: SnackPosition.TOP,
+          icon: const Icon(Icons.person_add_rounded, color: Colors.white),
+          backgroundColor: const Color(0xFF1D9E75),
+          colorText: Colors.white,
+          duration: const Duration(seconds: 4),
+        );
+      }
+      _lastCount = list.length;
+    });
   }
 
   Future<void> _logAction({
