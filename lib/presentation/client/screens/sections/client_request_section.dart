@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:intl/intl.dart';
 
 import '../client_home_screen.dart' show CTheme;
 import '../../controllers/client_controller.dart';
@@ -43,7 +42,10 @@ class _ClientRequestSectionState extends State<ClientRequestSection> {
         child: Obx(() {
           if (widget.ctrl.submitSuccess.value) {
             return _SuccessView(ctrl: widget.ctrl,
-                onNew: () => setState(() => _step = 0));
+                onNew: () {
+                    widget.ctrl.clearForm();
+                    setState(() => _step = 0);
+                  });
           }
           switch (_step) {
             case 0: return _StepCategory(
@@ -255,25 +257,6 @@ class _StepDetails extends StatelessWidget {
     required this.onNext,
   });
 
-  Future<void> _pickDate(BuildContext context) async {
-    final now = DateTime.now();
-    final date = await showDatePicker(
-      context: context,
-      initialDate: now.add(const Duration(hours: 2)),
-      firstDate: now,
-      lastDate: now.add(const Duration(days: 60)),
-    );
-    if (date == null) return;
-    if (!context.mounted) return;
-    final time = await showTimePicker(
-      context: context,
-      initialTime: TimeOfDay.fromDateTime(
-          now.add(const Duration(hours: 2))),
-    );
-    if (time == null) return;
-    ctrl.scheduledDate.value = DateTime(
-        date.year, date.month, date.day, time.hour, time.minute);
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -314,43 +297,7 @@ class _StepDetails extends StatelessWidget {
         ),
         const SizedBox(height: 16),
 
-        // Data e horário
-        const Text('Data e horário',
-            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600,
-                color: CTheme.textDark)),
-        const SizedBox(height: 8),
-        Obx(() => GestureDetector(
-          onTap: () => _pickDate(context),
-          child: Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: CTheme.border),
-            ),
-            child: Row(children: [
-              const Icon(Icons.calendar_today_rounded,
-                  color: CTheme.primary, size: 20),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  ctrl.scheduledDate.value != null
-                      ? DateFormat("dd/MM/yyyy 'às' HH:mm", 'pt_BR')
-                          .format(ctrl.scheduledDate.value!)
-                      : 'Selecionar data e horário',
-                  style: TextStyle(
-                      fontSize: 14,
-                      color: ctrl.scheduledDate.value != null
-                          ? CTheme.textDark : CTheme.textLight),
-                  overflow: TextOverflow.ellipsis, maxLines: 1,
-                ),
-              ),
-              const Icon(Icons.chevron_right_rounded, color: CTheme.textLight),
-            ]),
-          ),
-        )),
-        const SizedBox(height: 16),
+
 
         // Fotos opcionais
         const Text('Fotos (opcional)',
@@ -446,10 +393,6 @@ class _StepDetails extends StatelessWidget {
                     ctrl.submitError.value = 'Descreva o serviço.';
                     return;
                   }
-                  if (ctrl.scheduledDate.value == null) {
-                    ctrl.submitError.value = 'Selecione data e horário.';
-                    return;
-                  }
                   ctrl.submitError.value = '';
                   onNext();
                 },
@@ -480,7 +423,6 @@ class _StepConfirm extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final dateFmt = DateFormat("dd/MM/yyyy 'às' HH:mm", 'pt_BR');
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Obx(() => Column(
@@ -511,11 +453,7 @@ class _StepConfirm extends StatelessWidget {
               _ConfirmRow(Icons.description_outlined, 'Descrição',
                   ctrl.descriptionCtrl.text.trim()),
               const Divider(height: 20),
-              _ConfirmRow(Icons.calendar_today_rounded, 'Data/Horário',
-                  ctrl.scheduledDate.value != null
-                      ? dateFmt.format(ctrl.scheduledDate.value!)
-                      : '—'),
-              const Divider(height: 20),
+
               _ConfirmRow(Icons.location_on_outlined, 'Endereço',
                   ctrl.serviceAddress.value?.fullAddress ?? '—'),
               if (ctrl.photoFiles.isNotEmpty) ...[
