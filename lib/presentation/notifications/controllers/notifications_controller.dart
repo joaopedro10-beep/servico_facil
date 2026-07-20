@@ -61,41 +61,24 @@ class NotificationsController extends GetxController {
 
   void _startStream() {
     isLoading.value = true;
-    _sub = _fb.firestore
-        .collection('notifications')
-        .where('targetUserId', isEqualTo: _fb.uid)
-        .orderBy('createdAt', descending: true)
-        .limit(50)
-        .snapshots()
-        .listen((snap) {
-      notifications.assignAll(snap.docs
-          .map((d) => NotificationItem.fromMap(d.data(), d.id))
-          .toList());
-
-      final unread = notifications.where((n) => !n.isRead).length;
-      _notifService.unreadCount.value = unread;
+    _sub?.cancel();
+    _sub = _ds.watchNotifications(_fb.uid).listen((list) {
+      notifications.assignAll(
+          list.map((m) => NotificationItem.fromMap(m, m['id'] as String)).toList());
+      _notifService.unreadCount.value =
+          notifications.where((n) => !n.isRead).length;
       isLoading.value = false;
     }, onError: (_) => isLoading.value = false);
   }
 
   Future<void> markAllRead() async {
-    final unread =
-        notifications.where((n) => !n.isRead).map((n) => n.id).toList();
-    if (unread.isEmpty) return;
-
-    final batch = _fb.firestore.batch();
-    for (final id in unread) {
-      batch.update(
-          _fb.firestore.collection('notifications').doc(id),
-          {'isRead': true});
+    await _ds.markAllNotificationsRead(_fb.uid);
+    for (final n in notifications) {
+      if (!n.isRead) notifications.refresh();
     }
-    await batch.commit();
   }
 
   Future<void> markRead(String id) async {
-    await _fb.firestore
-        .collection('notifications')
-        .doc(id)
-        .update({'isRead': true});
+    await _ds.markNotificationRead(id);
   }
 }
