@@ -171,7 +171,9 @@ class OrderDetailScreen extends StatelessWidget {
             _InfoRow(
                 icon: Icons.calendar_today_outlined,
                 label: 'Data/hora',
-                value: fmt.format(order.scheduledAt)),
+                value: order.scheduledAt != null
+                    ? fmt.format(order.scheduledAt!)
+                    : 'Aguardando agendamento'),
             if (order.price != null)
               _InfoRow(
                   icon: Icons.attach_money,
@@ -369,6 +371,23 @@ class OrderDetailScreen extends StatelessWidget {
                 label: const Text('Recusar'),
               ),
             ],
+            // Botão Agendar: aparece quando accepted e ainda sem scheduledAt
+            if (order.status == OrderStatus.accepted &&
+                order.scheduledAt == null) ...[
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF1D9E75),
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size.fromHeight(48),
+                ),
+                onPressed: ctrl.isSaving.value
+                    ? null
+                    : () => _pickSchedule(context, ctrl),
+                icon: const Icon(Icons.calendar_today_rounded),
+                label: const Text('Agendar serviço'),
+              ),
+              const SizedBox(height: 10),
+            ],
             if (order.canWorkerStart)
               ElevatedButton.icon(
                 onPressed:
@@ -386,6 +405,32 @@ class OrderDetailScreen extends StatelessWidget {
               ),
           ],
         ));
+  }
+
+  Future<void> _pickSchedule(
+      BuildContext context, OrderController ctrl) async {
+    final now = DateTime.now();
+    final date = await showDatePicker(
+      context: context,
+      initialDate: now.add(const Duration(hours: 2)),
+      firstDate: now,
+      lastDate: now.add(const Duration(days: 30)),
+      helpText: 'Data do serviço',
+    );
+    if (date == null || !context.mounted) return;
+
+    final time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay(
+          hour: now.add(const Duration(hours: 2)).hour, minute: 0),
+      helpText: 'Horário do serviço',
+    );
+    if (time == null || !context.mounted) return;
+
+    final scheduledAt = DateTime(
+        date.year, date.month, date.day, time.hour, time.minute);
+
+    await ctrl.scheduleOrder(scheduledAt);
   }
 
   Future<void> _confirmComplete(
