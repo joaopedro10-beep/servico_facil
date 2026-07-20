@@ -3,77 +3,78 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:get/get.dart';
+import 'package:shimmer/main.dart';
 
-import 'core/bindings/auth_binding.dart';
-import 'core/bindings/initial_binding.dart';
-import 'core/constants/app_routes.dart';
-import 'core/constants/app_strings.dart';
-import 'core/theme/app_theme.dart';
-import 'core/services/firebase_service.dart';
-import 'core/services/notification_service.dart';
-import 'firebase_options.dart';
+import 'lib/core/bindings/auth_binding.dart';
+import 'lib/core/bindings/initial_binding.dart';
+import 'lib/core/constants/app_routes.dart';
+import 'lib/core/constants/app_strings.dart';
+import 'lib/core/theme/app_theme.dart';
+import 'lib/core/services/firebase_service.dart';
+import 'lib/core/services/notification_service.dart';
+import 'lib/firebase_options.dart';
 
 // ── Auth ─────────────────────────────────────────────────────────────────────
-import 'presentation/auth/screens/splash_screen.dart';
-import 'presentation/auth/screens/onboarding_screen.dart';
-import 'presentation/auth/screens/welcome_screen.dart';
-import 'presentation/auth/screens/login_screen.dart';
-import 'presentation/auth/screens/register_client_screen.dart';
-import 'presentation/auth/screens/complete_profile_screen.dart';
-import 'presentation/auth/screens/complete_profile_success_screen.dart';
-import 'presentation/auth/screens/register_worker_screen.dart';
-import 'presentation/auth/screens/document_upload_screen.dart';
-import 'presentation/auth/screens/verify_email_screen.dart';
-import 'presentation/auth/screens/pending_verification_screen.dart';
+import 'lib/presentation/auth/screens/splash_screen.dart';
+import 'lib/presentation/auth/screens/onboarding_screen.dart';
+import 'lib/presentation/auth/screens/welcome_screen.dart';
+import 'lib/presentation/auth/screens/login_screen.dart';
+import 'lib/presentation/auth/screens/register_client_screen.dart';
+import 'lib/presentation/auth/screens/complete_profile_screen.dart';
+import 'lib/presentation/auth/screens/complete_profile_success_screen.dart';
+import 'lib/presentation/auth/screens/register_worker_screen.dart';
+import 'lib/presentation/auth/screens/document_upload_screen.dart';
+import 'lib/presentation/auth/screens/verify_email_screen.dart';
+import 'lib/presentation/auth/screens/pending_verification_screen.dart';
 
 // ── Client ───────────────────────────────────────────────────────────────────
-import 'presentation/client/screens/client_home_screen.dart';
-import 'presentation/client/screens/client_profile_screen.dart';
-import 'presentation/client/controllers/client_home_controller.dart';
-import 'presentation/client/controllers/client_profile_controller.dart';
+import 'lib/presentation/client/screens/client_home_screen.dart';
+import 'lib/presentation/client/screens/client_profile_screen.dart';
+import 'lib/presentation/client/controllers/client_home_controller.dart';
+import 'lib/presentation/client/controllers/client_profile_controller.dart';
 
 // ── Worker ───────────────────────────────────────────────────────────────────
-import 'presentation/worker/screens/worker_home_screen.dart';
-import 'presentation/worker/screens/worker_profile_screen.dart';
-import 'presentation/worker/screens/edit_worker_profile_screen.dart';
-import 'presentation/worker/screens/earnings_screen.dart';
-import 'presentation/worker/controllers/worker_home_controller.dart';
-import 'presentation/worker/controllers/worker_profile_controller.dart';
+import 'lib/presentation/worker/screens/worker_home_screen.dart';
+import 'lib/presentation/worker/screens/worker_profile_screen.dart';
+import 'lib/presentation/worker/screens/edit_worker_profile_screen.dart';
+import 'lib/presentation/worker/screens/earnings_screen.dart';
+import 'lib/presentation/worker/controllers/worker_home_controller.dart';
+import 'lib/presentation/worker/controllers/worker_profile_controller.dart';
 
 // ── Orders ───────────────────────────────────────────────────────────────────
-import 'presentation/orders/screens/order_detail_screen.dart';
-import 'presentation/orders/screens/my_orders_screen.dart';
-import 'presentation/orders/controllers/order_controller.dart';
+import 'lib/presentation/orders/screens/order_detail_screen.dart';
+import 'lib/presentation/orders/screens/my_orders_screen.dart';
+import 'lib/presentation/orders/controllers/order_controller.dart';
 
 // ── Chat ─────────────────────────────────────────────────────────────────────
-import 'presentation/chat/screens/chat_screen.dart';
-import 'presentation/chat/screens/chats_list_screen.dart';
-import 'presentation/chat/controllers/chat_controller.dart';
+import 'lib/presentation/chat/screens/chat_screen.dart';
+import 'lib/presentation/chat/screens/chats_list_screen.dart';
+import 'lib/presentation/chat/controllers/chat_controller.dart';
 
 // ── Reviews ──────────────────────────────────────────────────────────────────
-import 'presentation/reviews/screens/rate_service_screen.dart';
-import 'presentation/reviews/screens/reviews_screen.dart';
-import 'presentation/reviews/controllers/review_controller.dart';
+import 'lib/presentation/reviews/screens/rate_service_screen.dart';
+import 'lib/presentation/reviews/screens/reviews_screen.dart';
+import 'lib/presentation/reviews/controllers/review_controller.dart';
 
 // ── Safety ───────────────────────────────────────────────────────────────────
-import 'presentation/safety/screens/report_screen.dart';
-import 'presentation/safety/screens/safety_tips_screen.dart';
-import 'presentation/safety/screens/block_screen.dart';
+import 'lib/presentation/safety/screens/report_screen.dart';
+import 'lib/presentation/safety/screens/safety_tips_screen.dart';
+import 'lib/presentation/safety/screens/block_screen.dart';
 
 // ── Notifications ────────────────────────────────────────────────────────────
-import 'presentation/notifications/screens/notifications_screen.dart';
-import 'presentation/notifications/controllers/notifications_controller.dart';
+import 'lib/presentation/notifications/screens/notifications_screen.dart';
+import 'lib/presentation/notifications/controllers/notifications_controller.dart';
 
 // ── Settings ─────────────────────────────────────────────────────────────────
-import 'presentation/settings/screens/settings_screen.dart';
-import 'presentation/settings/controllers/settings_controller.dart';
+import 'lib/presentation/settings/screens/settings_screen.dart';
+import 'lib/presentation/settings/controllers/settings_controller.dart';
 
 // ── Shared ───────────────────────────────────────────────────────────────────
 
 // ── Admin ─────────────────────────────────────────────────────────────────────
-import 'presentation/admin/screens/admin_home_screen.dart';
-import 'presentation/admin/controllers/admin_controller.dart';
-import 'data/datasources/admin_datasource.dart';
+import 'lib/presentation/admin/screens/admin_home_screen.dart';
+import 'lib/presentation/admin/controllers/admin_controller.dart';
+import 'lib/data/datasources/admin_datasource.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -97,7 +98,10 @@ void main() async {
   ]);
 
   // Remove a barra de navegação horizontal do Android (3 botões/gestos)
-  SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+  await SystemChrome.setEnabledSystemUIMode(
+    SystemUiMode.immersiveSticky,
+  );
+
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
