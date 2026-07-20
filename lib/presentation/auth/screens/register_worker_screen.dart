@@ -40,7 +40,8 @@ class RegisterWorkerScreen extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text('Dados profissionais',
-                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
+                    style:
+                        TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
                 const SizedBox(height: 6),
                 const Text(
                   'Preencha seus dados e mostre o que você faz de melhor.',
@@ -81,7 +82,8 @@ class RegisterWorkerScreen extends StatelessWidget {
                 const SizedBox(height: 4),
                 const Text(
                   'Informe o CEP da sua região de atendimento e localizamos automaticamente.',
-                  style: TextStyle(color: AppColors.textSecondary, fontSize: 12.5),
+                  style:
+                      TextStyle(color: AppColors.textSecondary, fontSize: 12.5),
                 ),
                 const SizedBox(height: 12),
 
@@ -122,32 +124,39 @@ class RegisterWorkerScreen extends StatelessWidget {
                 _SectionTitle('Serviços que você oferece'),
                 const SizedBox(height: 6),
                 const Text('Selecione pelo menos uma categoria:',
-                    style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+                    style: TextStyle(
+                        color: AppColors.textSecondary, fontSize: 13)),
                 const SizedBox(height: 12),
 
                 Obx(() => Wrap(
-                  spacing: 8, runSpacing: 8,
-                  children: AppStrings.serviceCategories.map((cat) {
-                    final selected = ctrl.selectedCategories.contains(cat);
-                    return FilterChip(
-                      label: Row(mainAxisSize: MainAxisSize.min, children: [
-                        Icon(_categoryIcons[cat] ?? Icons.work_outline,
-                            size: 16,
-                            color: selected ? AppColors.primary : AppColors.textSecondary),
-                        const SizedBox(width: 6),
-                        Text(cat),
-                      ]),
-                      selected: selected,
-                      onSelected: (_) => ctrl.toggleCategory(cat),
-                      selectedColor: AppColors.primary.withOpacity(0.15),
-                      checkmarkColor: AppColors.primary,
-                      labelStyle: TextStyle(
-                        color: selected ? AppColors.primary : AppColors.textPrimary,
-                        fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
-                      ),
-                    );
-                  }).toList(),
-                )),
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: AppStrings.serviceCategories.map((cat) {
+                        final selected = ctrl.selectedCategories.contains(cat);
+                        return FilterChip(
+                          label: Row(mainAxisSize: MainAxisSize.min, children: [
+                            Icon(_categoryIcons[cat] ?? Icons.work_outline,
+                                size: 16,
+                                color: selected
+                                    ? AppColors.primary
+                                    : AppColors.textSecondary),
+                            const SizedBox(width: 6),
+                            Text(cat),
+                          ]),
+                          selected: selected,
+                          onSelected: (_) => ctrl.toggleCategory(cat),
+                          selectedColor: AppColors.primary.withOpacity(0.15),
+                          checkmarkColor: AppColors.primary,
+                          labelStyle: TextStyle(
+                            color: selected
+                                ? AppColors.primary
+                                : AppColors.textPrimary,
+                            fontWeight:
+                                selected ? FontWeight.w600 : FontWeight.normal,
+                          ),
+                        );
+                      }).toList(),
+                    )),
                 const SizedBox(height: 20),
 
                 AppTextField(
@@ -159,15 +168,7 @@ class RegisterWorkerScreen extends StatelessWidget {
                   validator: (v) =>
                       Validators.minLength(v, 20, field: 'Descrição'),
                 ),
-                const SizedBox(height: 14),
 
-                AppTextField(
-                  controller: ctrl.priceCtrl,
-                  label: 'Preço por hora (R\$)',
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  prefixIcon: const Icon(Icons.attach_money),
-                  validator: Validators.price,
-                ),
                 const SizedBox(height: 28),
 
                 // ── Senha ───────────────────────────────────────────────────
@@ -175,29 +176,31 @@ class RegisterWorkerScreen extends StatelessWidget {
                 const SizedBox(height: 12),
 
                 Obx(() => PasswordStrengthField(
-                  controller: ctrl.passwordCtrl,
-                  label: 'Senha',
-                  visible: ctrl.passwordVisible.value,
-                  onToggleVisibility: ctrl.togglePasswordVisibility,
-                  strength: ctrl.passwordStrength.value,
-                  validator: Validators.password,
-                )),
+                      controller: ctrl.passwordCtrl,
+                      label: 'Senha',
+                      visible: ctrl.passwordVisible.value,
+                      onToggleVisibility: ctrl.togglePasswordVisibility,
+                      strength: ctrl.passwordStrength.value,
+                      validator: Validators.password,
+                    )),
                 const SizedBox(height: 14),
 
                 Obx(() => AppTextField(
-                  controller: ctrl.confirmPasswordCtrl,
-                  label: 'Confirmar senha',
-                  obscureText: !ctrl.confirmPasswordVisible.value,
-                  prefixIcon: const Icon(Icons.lock_outline),
-                  validator: (v) =>
-                      Validators.confirmPassword(v, ctrl.passwordCtrl.text),
-                  suffixIcon: IconButton(
-                    icon: Icon(ctrl.confirmPasswordVisible.value
-                        ? Icons.visibility_off : Icons.visibility,
-                        color: AppColors.textSecondary),
-                    onPressed: ctrl.toggleConfirmPasswordVisibility,
-                  ),
-                )),
+                      controller: ctrl.confirmPasswordCtrl,
+                      label: 'Confirmar senha',
+                      obscureText: !ctrl.confirmPasswordVisible.value,
+                      prefixIcon: const Icon(Icons.lock_outline),
+                      validator: (v) =>
+                          Validators.confirmPassword(v, ctrl.passwordCtrl.text),
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                            ctrl.confirmPasswordVisible.value
+                                ? Icons.visibility_off
+                                : Icons.visibility,
+                            color: AppColors.textSecondary),
+                        onPressed: ctrl.toggleConfirmPasswordVisibility,
+                      ),
+                    )),
                 const SizedBox(height: 24),
 
                 Obx(() => ctrl.errorMessage.value.isEmpty
@@ -205,14 +208,14 @@ class RegisterWorkerScreen extends StatelessWidget {
                     : ErrorBanner(ctrl.errorMessage.value)),
 
                 Obx(() => PrimaryButton(
-                  label: 'Próximo: Enviar documento',
-                  isLoading: ctrl.isLoading.value,
-                  icon: Icons.arrow_forward_rounded,
-                  onPressed: () {
-                    ctrl.clearError();
-                    ctrl.goToDocumentUpload();
-                  },
-                )),
+                      label: 'Próximo: Enviar documento',
+                      isLoading: ctrl.isLoading.value,
+                      icon: Icons.arrow_forward_rounded,
+                      onPressed: () {
+                        ctrl.clearError();
+                        ctrl.goToDocumentUpload();
+                      },
+                    )),
                 const SizedBox(height: 20),
               ],
             ),
@@ -225,13 +228,16 @@ class RegisterWorkerScreen extends StatelessWidget {
 
 class _SectionTitle extends StatelessWidget {
   final String title;
+
   const _SectionTitle(this.title);
 
   @override
   Widget build(BuildContext context) {
     return Text(title,
         style: const TextStyle(
-          fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.textPrimary,
+          fontSize: 15,
+          fontWeight: FontWeight.w600,
+          color: AppColors.textPrimary,
         ));
   }
 }
