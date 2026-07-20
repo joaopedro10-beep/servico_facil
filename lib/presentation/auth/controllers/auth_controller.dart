@@ -8,6 +8,7 @@ import '../../../core/errors/app_exceptions.dart';
 import '../../../core/services/cep_service.dart';
 import '../../../data/repositories/auth_repository_impl.dart';
 import '../../../core/services/firebase_service.dart';
+import '../../../data/datasources/firestore_datasource.dart';
 
 class AuthController extends GetxController {
   final AuthRepositoryImpl _repo = Get.find<AuthRepositoryImpl>();
@@ -86,7 +87,8 @@ class AuthController extends GetxController {
     if (user == null) return;
 
     if (!user.emailVerified) {
-      Get.offAllNamed(AppRoutes.verifyEmail);
+      // 2.1: após cadastro, vai para tela de aguardo de análise
+      Get.offAllNamed(AppRoutes.pendingVerification);
       return;
     }
 
@@ -135,7 +137,8 @@ class AuthController extends GetxController {
       );
       await _navigateAfterLogin(type);
     } on EmailNotVerifiedException {
-      Get.offAllNamed(AppRoutes.verifyEmail);
+      // 2.1: após cadastro, vai para tela de aguardo de análise
+      Get.offAllNamed(AppRoutes.pendingVerification);
     } on AppException catch (e) {
       _showError(e.message);
     } finally {
@@ -175,7 +178,8 @@ class AuthController extends GetxController {
         lat: addressLat.value,
         lng: addressLng.value,
       );
-      Get.offAllNamed(AppRoutes.verifyEmail);
+      // 2.1: após cadastro, vai para tela de aguardo de análise
+      Get.offAllNamed(AppRoutes.pendingVerification);
     } on AppException catch (e) {
       _showError(e.message);
     } finally {
@@ -250,7 +254,8 @@ class AuthController extends GetxController {
         lng: addressLng.value,
         documentLocalPath: documentFile.value?.path ?? '',
       );
-      Get.offAllNamed(AppRoutes.verifyEmail);
+      // 2.1: após cadastro, vai para tela de aguardo de análise
+      Get.offAllNamed(AppRoutes.pendingVerification);
     } on AppException catch (e) {
       _showError(e.message);
     } finally {
@@ -354,7 +359,20 @@ class AuthController extends GetxController {
     }
 
     if (type == 'worker') {
-      Get.offAllNamed(AppRoutes.workerHome);
+      // 2.2: Verificar status do prestador ao fazer login
+      final fb = Get.find<FirebaseService>();
+      final ds = Get.find<FirestoreDatasource>();
+      final worker = await ds.getWorker(fb.currentUser?.uid ?? '');
+      if (worker != null) {
+        if (worker.isVerified) {
+          Get.offAllNamed(AppRoutes.workerHome);
+        } else {
+          // Ainda pendente ou documentos rejeitados → tela de aguardo
+          Get.offAllNamed(AppRoutes.pendingVerification);
+        }
+      } else {
+        Get.offAllNamed(AppRoutes.pendingVerification);
+      }
       return;
     }
     final needsCompletion = await _repo.currentUserNeedsProfileCompletion();
