@@ -275,7 +275,7 @@ class _RequestCard extends StatelessWidget {
             Expanded(
               child: Text(
                 DateFormat('dd/MM/yyyy · HH:mm', 'pt_BR')
-                    .format(order.scheduledAt),
+                    .format(order.scheduledAt ?? DateTime.now()),
                 style: const TextStyle(
                     fontSize: 12, color: WTheme.textGray),
                 overflow: TextOverflow.ellipsis, maxLines: 1,
