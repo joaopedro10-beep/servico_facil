@@ -120,11 +120,31 @@ class PendingVerificationScreen extends StatelessWidget {
       if (worker == null) return;
 
       if (worker.isVerified) {
+        // 2.2: mostra mensagem de aprovado antes de entrar no app
+        Get.snackbar(
+          '🎉 Cadastro aprovado!',
+          'Seu perfil foi aprovado. Bem-vindo ao ServiçoFácil!',
+          snackPosition: SnackPosition.TOP,
+          backgroundColor: AppColors.success,
+          colorText: Colors.white,
+          duration: const Duration(seconds: 3),
+        );
+        await Future.delayed(const Duration(seconds: 2));
         Get.offAllNamed(AppRoutes.workerHome);
+      } else if (worker.verificationStatus.name == 'documentsRequired') {
+        // 1.3: admin solicitou novos documentos
+        Get.snackbar(
+          'Documentos inválidos',
+          'O admin solicitou o reenvio dos seus documentos. Toque aqui para saber mais.',
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: AppColors.warning,
+          colorText: Colors.white,
+          duration: const Duration(seconds: 5),
+        );
       } else {
         Get.snackbar(
           'Ainda em análise',
-          'Seu cadastro ainda está sendo verificado. Aguarde o e-mail de confirmação.',
+          'Seu cadastro está sendo verificado. Prazo estimado: 24 horas.',
           snackPosition: SnackPosition.BOTTOM,
           backgroundColor: AppColors.warning.withOpacity(0.1),
           colorText: AppColors.textPrimary,
