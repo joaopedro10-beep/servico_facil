@@ -3,12 +3,20 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 
-import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_routes.dart';
 import '../../../../data/models/order_model.dart';
 import '../../controllers/worker_controller.dart';
 import '../worker_home_screen.dart' show WTheme;
 
+/// Dashboard completo estilo iFood/Uber Driver.
+/// Exibe em tempo real via Obx:
+///   • Saudação + status online/offline
+///   • Cards de serviços (hoje / semana / mês / total concluídos)
+///   • Cards de receita (hoje / semana / mês / total)
+///   • Avaliação média + cancelados
+///   • Gráfico de barras — serviços por mês (6 meses)
+///   • Gráfico de barras — receita por mês (6 meses)
+///   • Lista dos últimos serviços concluídos
 class WorkerDashboardSection extends StatelessWidget {
   final WorkerController ctrl;
   final VoidCallback onMenuTap;
@@ -21,22 +29,33 @@ class WorkerDashboardSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return RefreshIndicator(
-      color: WTheme.blue,
+      color: WTheme.primary,
       onRefresh: ctrl.reload,
       child: CustomScrollView(
         slivers: [
-          SliverToBoxAdapter(child: _TopBar(ctrl: ctrl, onMenuTap: onMenuTap)),
+          SliverToBoxAdapter(
+              child: _TopBar(ctrl: ctrl, onMenuTap: onMenuTap)),
           SliverToBoxAdapter(child: _DashHeader(ctrl: ctrl)),
-          SliverToBoxAdapter(child: _StatsGrid(ctrl: ctrl)),
-          SliverToBoxAdapter(child: _RequestsList(ctrl: ctrl)),
-          SliverToBoxAdapter(child: const SizedBox(height: 16)),
+          SliverToBoxAdapter(child: _SectionTitle('Serviços')),
+          SliverToBoxAdapter(child: _ServicesRow(ctrl: ctrl)),
+          SliverToBoxAdapter(child: _SectionTitle('Receita')),
+          SliverToBoxAdapter(child: _EarningsRow(ctrl: ctrl)),
+          SliverToBoxAdapter(child: _SectionTitle('Desempenho')),
+          SliverToBoxAdapter(child: _PerformanceRow(ctrl: ctrl)),
+          SliverToBoxAdapter(child: _SectionTitle('Serviços por mês')),
+          SliverToBoxAdapter(child: _MonthlyServicesChart(ctrl: ctrl)),
+          SliverToBoxAdapter(child: _SectionTitle('Receita por mês')),
+          SliverToBoxAdapter(child: _MonthlyEarningsChart(ctrl: ctrl)),
+          SliverToBoxAdapter(child: _SectionTitle('Últimos serviços')),
+          SliverToBoxAdapter(child: _RecentServices(ctrl: ctrl)),
+          const SliverToBoxAdapter(child: SizedBox(height: 24)),
         ],
       ),
     );
   }
 }
 
-// ─── Top Bar azul ─────────────────────────────────────────────────────────────
+// ─── Top Bar ──────────────────────────────────────────────────────────────────
 class _TopBar extends StatelessWidget {
   final WorkerController ctrl;
   final VoidCallback onMenuTap;
@@ -45,7 +64,7 @@ class _TopBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: WTheme.blue,
+      color: WTheme.primary,
       padding: const EdgeInsets.fromLTRB(8, 8, 12, 8),
       child: Row(children: [
         IconButton(
@@ -55,34 +74,26 @@ class _TopBar extends StatelessWidget {
           constraints: const BoxConstraints(),
         ),
         const SizedBox(width: 4),
-        // Logo
         Container(
           width: 28, height: 28,
           decoration: BoxDecoration(
             color: Colors.white.withOpacity(0.2),
-            shape: BoxShape.circle,
+            borderRadius: BorderRadius.circular(8),
           ),
           child: const Center(
-            child: Text('SF',
-                style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w800)),
+            child: Icon(Icons.shield_rounded, color: Colors.white, size: 16),
           ),
         ),
-        const SizedBox(width: 6),
+        const SizedBox(width: 8),
         const Expanded(
           child: Text('Serviço Fácil',
-              style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 16,
+              style: TextStyle(color: Colors.white, fontSize: 16,
                   fontWeight: FontWeight.w700),
-              overflow: TextOverflow.ellipsis,
-              maxLines: 1),
+              overflow: TextOverflow.ellipsis, maxLines: 1),
         ),
-        // Badge notificações
+        // Badge de novas solicitações
         Obx(() {
-          final count = ctrl.newOrders.length;
+          final count = ctrl.availableOrders.length;
           return Stack(clipBehavior: Clip.none, children: [
             IconButton(
               icon: const Icon(Icons.notifications_outlined,
@@ -92,41 +103,33 @@ class _TopBar extends StatelessWidget {
               constraints: const BoxConstraints(),
             ),
             if (count > 0)
-              Positioned(
-                right: 4, top: 4,
+              Positioned(right: 4, top: 4,
                 child: Container(
                   width: 16, height: 16,
                   decoration: const BoxDecoration(
                       color: WTheme.red, shape: BoxShape.circle),
-                  child: Center(
-                    child: Text('$count',
-                        style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 9,
-                            fontWeight: FontWeight.w800)),
-                  ),
+                  child: Center(child: Text('$count',
+                      style: const TextStyle(
+                          color: Colors.white, fontSize: 9,
+                          fontWeight: FontWeight.w800))),
                 ),
               ),
           ]);
         }),
         const SizedBox(width: 4),
-        // Avatar pequeno
         Obx(() {
           final w = ctrl.worker.value;
-          final initial =
-              w?.name.isNotEmpty == true ? w!.name[0].toUpperCase() : 'P';
+          final initial = w?.name.isNotEmpty == true
+              ? w!.name[0].toUpperCase() : 'P';
           return CircleAvatar(
             radius: 16,
             backgroundColor: Colors.white.withOpacity(0.25),
             backgroundImage: w?.photoUrl != null
-                ? NetworkImage(w!.photoUrl!)
-                : null,
+                ? NetworkImage(w!.photoUrl!) : null,
             child: w?.photoUrl == null
-                ? Text(initial,
-                    style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w800))
+                ? Text(initial, style: const TextStyle(
+                    color: Colors.white, fontSize: 13,
+                    fontWeight: FontWeight.w800))
                 : null,
           );
         }),
@@ -135,10 +138,17 @@ class _TopBar extends StatelessWidget {
   }
 }
 
-// ─── Saudação + status online ─────────────────────────────────────────────────
+// ─── Header: saudação + toggle online ────────────────────────────────────────
 class _DashHeader extends StatelessWidget {
   final WorkerController ctrl;
   const _DashHeader({required this.ctrl});
+
+  String get _greeting {
+    final h = DateTime.now().hour;
+    if (h < 12) return 'Bom dia';
+    if (h < 18) return 'Boa tarde';
+    return 'Boa noite';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -146,62 +156,60 @@ class _DashHeader extends StatelessWidget {
       color: Colors.white,
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
       child: Obx(() {
-        final w = ctrl.worker.value;
+        final w     = ctrl.worker.value;
         final first = w?.name.split(' ').first ?? 'Prestador';
+        final online = ctrl.isAvailable.value;
         return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
             Expanded(
-              child: Text('Olá, $first! 👋',
-                  style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w700,
-                      color: WTheme.textDark),
+              child: Text('$_greeting, $first! 👋',
+                  style: const TextStyle(fontSize: 20,
+                      fontWeight: FontWeight.w700, color: WTheme.textDark),
                   overflow: TextOverflow.ellipsis, maxLines: 1),
             ),
-            // Status online pill
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: ctrl.isAvailable.value
-                    ? WTheme.greenLight.withOpacity(0.15)
-                    : Colors.grey.shade100,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: ctrl.isAvailable.value
-                      ? WTheme.greenLight.withOpacity(0.4)
-                      : Colors.grey.shade300,
-                ),
-              ),
-              child: Row(mainAxisSize: MainAxisSize.min, children: [
-                Container(
-                  width: 7, height: 7,
-                  decoration: BoxDecoration(
-                    color: ctrl.isAvailable.value
-                        ? WTheme.greenLight
-                        : Colors.grey,
-                    shape: BoxShape.circle,
+            // Toggle online/offline
+            GestureDetector(
+              onTap: () => ctrl.toggleAvailability(!online),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 250),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: online
+                      ? WTheme.primary.withOpacity(0.1)
+                      : Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: online
+                        ? WTheme.primary.withOpacity(0.4)
+                        : Colors.grey.shade300,
                   ),
                 ),
-                const SizedBox(width: 5),
-                Text(
-                  ctrl.isAvailable.value ? 'Online' : 'Offline',
-                  style: TextStyle(
-                      color: ctrl.isAvailable.value
-                          ? WTheme.green
-                          : Colors.grey,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700),
-                ),
-              ]),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 250),
+                    width: 7, height: 7,
+                    decoration: BoxDecoration(
+                      color: online ? WTheme.greenLight : Colors.grey,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 5),
+                  Text(online ? 'Online' : 'Offline',
+                      style: TextStyle(
+                          color: online ? WTheme.green : Colors.grey,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700)),
+                ]),
+              ),
             ),
           ]),
           const SizedBox(height: 4),
           Text(
-            ctrl.isAvailable.value
-                ? 'Você está disponível para receber novos serviços.'
-                : 'Você está indisponível no momento.',
-            style: const TextStyle(
-                fontSize: 13, color: WTheme.textGray),
+            online
+                ? 'Você está disponível para receber novos chamados.'
+                : 'Você está offline. Ative para receber chamados.',
+            style: const TextStyle(fontSize: 13, color: WTheme.textGray),
             overflow: TextOverflow.ellipsis, maxLines: 2,
           ),
         ]);
@@ -210,357 +218,628 @@ class _DashHeader extends StatelessWidget {
   }
 }
 
-// ─── Grid de 4 cards de stats ─────────────────────────────────────────────────
-class _StatsGrid extends StatelessWidget {
+// ─── Título de seção ─────────────────────────────────────────────────────────
+class _SectionTitle extends StatelessWidget {
+  final String title;
+  const _SectionTitle(this.title);
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 20, 16, 10),
+      child: Text(title,
+          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700,
+              color: WTheme.textDark),
+          overflow: TextOverflow.ellipsis, maxLines: 1),
+    );
+  }
+}
+
+// ─── Serviços: hoje / semana / mês / total ────────────────────────────────────
+class _ServicesRow extends StatelessWidget {
   final WorkerController ctrl;
-  const _StatsGrid({required this.ctrl});
+  const _ServicesRow({required this.ctrl});
+
+  @override
+  Widget build(BuildContext context) {
+    return Obx(() => Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Column(children: [
+        Row(children: [
+          Expanded(child: _BigCard(
+            icon: Icons.today_rounded,
+            label: 'Hoje',
+            value: '${ctrl.todayOrders}',
+            color: WTheme.primary,
+            bg: WTheme.primaryLight,
+          )),
+          const SizedBox(width: 10),
+          Expanded(child: _BigCard(
+            icon: Icons.date_range_rounded,
+            label: 'Semana',
+            value: '${ctrl.weekOrders}',
+            color: const Color(0xFF6A1B9A),
+            bg: const Color(0xFFF3E5F5),
+          )),
+        ]),
+        const SizedBox(height: 10),
+        Row(children: [
+          Expanded(child: _BigCard(
+            icon: Icons.calendar_month_rounded,
+            label: 'Mês',
+            value: '${ctrl.monthOrders}',
+            color: const Color(0xFF0277BD),
+            bg: const Color(0xFFE1F5FE),
+          )),
+          const SizedBox(width: 10),
+          Expanded(child: _BigCard(
+            icon: Icons.task_alt_rounded,
+            label: 'Total concluídos',
+            value: '${ctrl.totalCompleted}',
+            color: WTheme.green,
+            bg: const Color(0xFFE8F5E9),
+          )),
+        ]),
+      ]),
+    ));
+  }
+}
+
+// ─── Receita: hoje / semana / mês / total ─────────────────────────────────────
+class _EarningsRow extends StatelessWidget {
+  final WorkerController ctrl;
+  const _EarningsRow({required this.ctrl});
+
+  @override
+  Widget build(BuildContext context) {
+    final money = NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$');
+    return Obx(() => Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Column(children: [
+        // Card destaque — total
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+                colors: [WTheme.primary, WTheme.primaryDark]),
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Text('Receita total acumulada',
+                style: TextStyle(color: Colors.white70, fontSize: 13),
+                overflow: TextOverflow.ellipsis),
+            const SizedBox(height: 6),
+            Text(money.format(ctrl.earningsTotal),
+                style: const TextStyle(color: Colors.white,
+                    fontSize: 30, fontWeight: FontWeight.w900),
+                overflow: TextOverflow.ellipsis, maxLines: 1),
+            const SizedBox(height: 2),
+            Text('${ctrl.totalCompleted} serviços concluídos',
+                style: const TextStyle(color: Colors.white60, fontSize: 12),
+                overflow: TextOverflow.ellipsis),
+          ]),
+        ),
+        const SizedBox(height: 10),
+        Row(children: [
+          Expanded(child: _EarningCard(
+              label: 'Hoje',
+              value: money.format(ctrl.earningsToday),
+              icon: Icons.wb_sunny_rounded,
+              color: WTheme.amber)),
+          const SizedBox(width: 10),
+          Expanded(child: _EarningCard(
+              label: 'Semana',
+              value: money.format(ctrl.earningsWeek),
+              icon: Icons.view_week_rounded,
+              color: WTheme.primary)),
+          const SizedBox(width: 10),
+          Expanded(child: _EarningCard(
+              label: 'Mês',
+              value: money.format(ctrl.earningsMonth),
+              icon: Icons.calendar_month_rounded,
+              color: const Color(0xFF6A1B9A))),
+        ]),
+      ]),
+    ));
+  }
+}
+
+// ─── Desempenho: avaliação + cancelados ───────────────────────────────────────
+class _PerformanceRow extends StatelessWidget {
+  final WorkerController ctrl;
+  const _PerformanceRow({required this.ctrl});
 
   @override
   Widget build(BuildContext context) {
     return Obx(() {
-      final money = NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$');
+      final avg       = ctrl.avgRating;
+      final total     = ctrl.worker.value?.totalReviews ?? 0;
+      final cancelled = ctrl.cancelledOrders.length;
+
       return Padding(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-        child: GridView.count(
-          crossAxisCount: 2,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          crossAxisSpacing: 10,
-          mainAxisSpacing: 10,
-          childAspectRatio: 1.2,
-          children: [
-            _StatCard(
-              icon: Icons.receipt_long_outlined,
-              label: 'Novas solicitações',
-              value: '${ctrl.newOrders.length}',
-              sub: 'Você está disponível',
-              iconBg: WTheme.blueLight,
-              iconColor: WTheme.blue,
-              valueColor: WTheme.blue,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: Row(children: [
+          // Avaliação média
+          Expanded(
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: WTheme.border),
+                boxShadow: const [
+                  BoxShadow(color: Color(0x0A000000),
+                      blurRadius: 6, offset: Offset(0, 2))
+                ],
+              ),
+              child: Column(children: [
+                const Icon(Icons.star_rounded,
+                    color: Colors.amber, size: 30),
+                const SizedBox(height: 6),
+                Text(avg > 0 ? avg.toStringAsFixed(1) : '—',
+                    style: const TextStyle(
+                        fontSize: 26, fontWeight: FontWeight.w900,
+                        color: WTheme.textDark),
+                    overflow: TextOverflow.ellipsis),
+                Text('Avaliação média',
+                    style: const TextStyle(
+                        fontSize: 11, color: WTheme.textGray),
+                    overflow: TextOverflow.ellipsis, maxLines: 1),
+                if (total > 0)
+                  Text('$total avaliações',
+                      style: const TextStyle(
+                          fontSize: 10, color: WTheme.textLight),
+                      overflow: TextOverflow.ellipsis),
+                if (avg > 0) ...[
+                  const SizedBox(height: 6),
+                  Row(mainAxisSize: MainAxisSize.min,
+                      children: List.generate(5, (i) => Icon(
+                        i < avg.round()
+                            ? Icons.star_rounded
+                            : Icons.star_outline_rounded,
+                        color: Colors.amber, size: 12,
+                      ))),
+                ],
+              ]),
             ),
-            _StatCard(
-              icon: Icons.engineering_outlined,
-              label: 'Em andamento',
-              value: '${ctrl.activeOrders.length}',
-              sub: 'Serviços ativos',
-              iconBg: const Color(0xFFFFF3E0),
-              iconColor: const Color(0xFFE65100),
-              valueColor: const Color(0xFFE65100),
+          ),
+          const SizedBox(width: 10),
+          // Taxa de conclusão
+          Expanded(
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: WTheme.border),
+                boxShadow: const [
+                  BoxShadow(color: Color(0x0A000000),
+                      blurRadius: 6, offset: Offset(0, 2))
+                ],
+              ),
+              child: Column(children: [
+                Icon(Icons.cancel_outlined,
+                    color: WTheme.red.withOpacity(0.8), size: 30),
+                const SizedBox(height: 6),
+                Text('$cancelled',
+                    style: const TextStyle(
+                        fontSize: 26, fontWeight: FontWeight.w900,
+                        color: WTheme.red),
+                    overflow: TextOverflow.ellipsis),
+                const Text('Cancelados',
+                    style: TextStyle(fontSize: 11, color: WTheme.textGray),
+                    overflow: TextOverflow.ellipsis),
+                const SizedBox(height: 4),
+                // Taxa de conclusão
+                Builder(builder: (_) {
+                  final total2 = ctrl.totalCompleted + cancelled;
+                  final rate   = total2 > 0
+                      ? (ctrl.totalCompleted / total2 * 100).round()
+                      : 0;
+                  return Column(children: [
+                    Text('$rate% conclusão',
+                        style: const TextStyle(
+                            fontSize: 11, color: WTheme.textLight),
+                        overflow: TextOverflow.ellipsis),
+                    const SizedBox(height: 4),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(4),
+                      child: LinearProgressIndicator(
+                        value: rate / 100,
+                        backgroundColor: WTheme.border,
+                        valueColor: AlwaysStoppedAnimation(
+                            rate >= 80 ? WTheme.green : WTheme.amber),
+                        minHeight: 5,
+                      ),
+                    ),
+                  ]);
+                }),
+              ]),
             ),
-            _StatCard(
-              icon: Icons.star_rounded,
-              label: 'Avaliação média',
-              value: ctrl.avgRating > 0
-                  ? ctrl.avgRating.toStringAsFixed(1)
-                  : '—',
-              sub: '⭐⭐⭐⭐⭐',
-              iconBg: const Color(0xFFFFF8E1),
-              iconColor: Colors.amber,
-              valueColor: Colors.amber.shade700,
-              isStar: ctrl.avgRating > 0,
-              starValue: ctrl.avgRating,
-            ),
-            _StatCard(
-              icon: Icons.account_balance_wallet_outlined,
-              label: 'Ganhos do mês',
-              value: money.format(ctrl.filteredEarnings
-                  .fold(0.0, (s, o) => s + (o.price ?? 0))),
-              sub: 'Total recebido',
-              iconBg: const Color(0xFFE8F5E9),
-              iconColor: WTheme.green,
-              valueColor: WTheme.green,
-              smallValue: true,
-            ),
-          ],
-        ),
+          ),
+        ]),
       );
     });
   }
 }
 
-class _StatCard extends StatelessWidget {
+// ─── Gráfico: serviços por mês ────────────────────────────────────────────────
+class _MonthlyServicesChart extends StatelessWidget {
+  final WorkerController ctrl;
+  const _MonthlyServicesChart({required this.ctrl});
+
+  @override
+  Widget build(BuildContext context) {
+    return Obx(() {
+      final now = DateTime.now();
+      final counts = List.generate(6, (i) {
+        int m = now.month - (5 - i);
+        int y = now.year;
+        if (m <= 0) { m += 12; y--; }
+        return ctrl.doneOrders.where((o) {
+          final d = o.completedAt ?? o.updatedAt;
+          return d.year == y && d.month == m;
+        }).length.toDouble();
+      });
+      final maxY = counts.fold(0.0, (a, b) => a > b ? a : b) + 1;
+
+      return _ChartCard(
+        child: BarChart(BarChartData(
+          maxY: maxY < 3 ? 3 : maxY,
+          gridData: FlGridData(
+            show: true, drawVerticalLine: false,
+            horizontalInterval: 1,
+            getDrawingHorizontalLine: (_) =>
+                const FlLine(color: WTheme.border, strokeWidth: 1),
+          ),
+          borderData: FlBorderData(show: false),
+          titlesData: FlTitlesData(
+            leftTitles: AxisTitles(sideTitles: SideTitles(
+              showTitles: true, reservedSize: 24, interval: 1,
+              getTitlesWidget: (v, _) => Text(v.toInt().toString(),
+                  style: const TextStyle(
+                      fontSize: 9, color: WTheme.textGray)),
+            )),
+            bottomTitles: AxisTitles(sideTitles: SideTitles(
+              showTitles: true,
+              getTitlesWidget: (v, _) {
+                int m = now.month - (5 - v.toInt());
+                if (m <= 0) m += 12;
+                return Text(
+                    DateFormat.MMM('pt').format(DateTime(2024, m)),
+                    style: const TextStyle(
+                        fontSize: 9, color: WTheme.textGray));
+              },
+            )),
+            rightTitles: const AxisTitles(
+                sideTitles: SideTitles(showTitles: false)),
+            topTitles: const AxisTitles(
+                sideTitles: SideTitles(showTitles: false)),
+          ),
+          barGroups: counts.asMap().entries.map((e) =>
+              BarChartGroupData(x: e.key, barRods: [
+                BarChartRodData(
+                  toY: e.value,
+                  color: e.key == 5
+                      ? WTheme.primary : WTheme.primary.withOpacity(0.5),
+                  width: 22,
+                  borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(6)),
+                ),
+              ])).toList(),
+        )),
+      );
+    });
+  }
+}
+
+// ─── Gráfico: receita por mês ─────────────────────────────────────────────────
+class _MonthlyEarningsChart extends StatelessWidget {
+  final WorkerController ctrl;
+  const _MonthlyEarningsChart({required this.ctrl});
+
+  @override
+  Widget build(BuildContext context) {
+    final money = NumberFormat.compactCurrency(
+        locale: 'pt_BR', symbol: 'R\$', decimalDigits: 0);
+
+    return Obx(() {
+      final now    = DateTime.now();
+      final values = ctrl.earningsByMonth;
+      final maxY   = values.fold(0.0, (a, b) => a > b ? a : b) * 1.2;
+
+      return _ChartCard(
+        child: BarChart(BarChartData(
+          maxY: maxY < 100 ? 100 : maxY,
+          gridData: FlGridData(
+            show: true, drawVerticalLine: false,
+            getDrawingHorizontalLine: (_) =>
+                const FlLine(color: WTheme.border, strokeWidth: 1),
+          ),
+          borderData: FlBorderData(show: false),
+          titlesData: FlTitlesData(
+            leftTitles: AxisTitles(sideTitles: SideTitles(
+              showTitles: true, reservedSize: 42,
+              getTitlesWidget: (v, _) => Text(money.format(v),
+                  style: const TextStyle(
+                      fontSize: 8, color: WTheme.textGray)),
+            )),
+            bottomTitles: AxisTitles(sideTitles: SideTitles(
+              showTitles: true,
+              getTitlesWidget: (v, _) {
+                int m = now.month - (5 - v.toInt());
+                if (m <= 0) m += 12;
+                return Text(
+                    DateFormat.MMM('pt').format(DateTime(2024, m)),
+                    style: const TextStyle(
+                        fontSize: 9, color: WTheme.textGray));
+              },
+            )),
+            rightTitles: const AxisTitles(
+                sideTitles: SideTitles(showTitles: false)),
+            topTitles: const AxisTitles(
+                sideTitles: SideTitles(showTitles: false)),
+          ),
+          barGroups: values.asMap().entries.map((e) =>
+              BarChartGroupData(x: e.key, barRods: [
+                BarChartRodData(
+                  toY: e.value,
+                  gradient: LinearGradient(
+                    colors: [
+                      WTheme.primary,
+                      WTheme.primary.withOpacity(
+                          e.key == 5 ? 1.0 : 0.5),
+                    ],
+                    begin: Alignment.bottomCenter,
+                    end: Alignment.topCenter,
+                  ),
+                  width: 22,
+                  borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(6)),
+                ),
+              ])).toList(),
+        )),
+      );
+    });
+  }
+}
+
+// ─── Últimos serviços ─────────────────────────────────────────────────────────
+class _RecentServices extends StatelessWidget {
+  final WorkerController ctrl;
+  const _RecentServices({required this.ctrl});
+
+  @override
+  Widget build(BuildContext context) {
+    final money  = NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$');
+    final dateFmt = DateFormat('dd/MM/yy · HH:mm', 'pt_BR');
+
+    return Obx(() {
+      final recent = ctrl.doneOrders.take(5).toList();
+      if (recent.isEmpty) {
+        return Container(
+          margin: const EdgeInsets.symmetric(horizontal: 16),
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: WTheme.border),
+          ),
+          child: const Row(children: [
+            Icon(Icons.history_rounded, color: WTheme.textLight, size: 24),
+            SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Nenhum serviço concluído ainda.',
+                style: TextStyle(color: WTheme.textGray, fontSize: 13),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ]),
+        );
+      }
+
+      return Column(
+        children: [
+          ...recent.map((o) => GestureDetector(
+            onTap: () => Get.toNamed(AppRoutes.orderDetail,
+                arguments: {'order': o, 'isWorker': true}),
+            child: Container(
+              margin: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: WTheme.border),
+                boxShadow: const [
+                  BoxShadow(color: Color(0x08000000),
+                      blurRadius: 4, offset: Offset(0, 2))
+                ],
+              ),
+              child: Row(children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: WTheme.primaryLight,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.check_circle_rounded,
+                      color: WTheme.primary, size: 20),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(o.serviceCategory,
+                          style: const TextStyle(
+                              fontWeight: FontWeight.w700, fontSize: 13),
+                          maxLines: 1, overflow: TextOverflow.ellipsis),
+                      Text(
+                        '${o.clientName ?? "Cliente"} · '
+                        '${dateFmt.format(o.completedAt ?? o.updatedAt)}',
+                        style: const TextStyle(
+                            fontSize: 11, color: WTheme.textGray),
+                        maxLines: 1, overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+                Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                  Text(
+                    o.price != null ? money.format(o.price) : '—',
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13, color: WTheme.primary),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  Container(
+                    margin: const EdgeInsets.only(top: 4),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: WTheme.primaryLight,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: const Text('Concluído',
+                        style: TextStyle(fontSize: 9,
+                            color: WTheme.primary,
+                            fontWeight: FontWeight.w700)),
+                  ),
+                ]),
+              ]),
+            ),
+          )),
+          // Ver todos
+          if (ctrl.doneOrders.length > 5)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+              child: TextButton(
+                onPressed: () => Get.toNamed(AppRoutes.workerReports),
+                child: const Text('Ver todos os serviços →',
+                    style: TextStyle(color: WTheme.primary,
+                        fontWeight: FontWeight.w600, fontSize: 13)),
+              ),
+            ),
+        ],
+      );
+    });
+  }
+}
+
+// ─── Widgets auxiliares ───────────────────────────────────────────────────────
+
+class _BigCard extends StatelessWidget {
   final IconData icon;
   final String label;
   final String value;
-  final String sub;
-  final Color iconBg;
-  final Color iconColor;
-  final Color valueColor;
-  final bool isStar;
-  final double starValue;
-  final bool smallValue;
-
-  const _StatCard({
+  final Color color;
+  final Color bg;
+  const _BigCard({
     required this.icon,
     required this.label,
     required this.value,
-    required this.sub,
-    required this.iconBg,
-    required this.iconColor,
-    required this.valueColor,
-    this.isStar = false,
-    this.starValue = 0,
-    this.smallValue = false,
+    required this.color,
+    required this.bg,
   });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: WTheme.card,
+        color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: WTheme.border),
         boxShadow: const [
-          BoxShadow(
-              color: Color(0x0A000000),
-              blurRadius: 6,
-              offset: Offset(0, 2)),
+          BoxShadow(color: Color(0x0A000000),
+              blurRadius: 6, offset: Offset(0, 2)),
         ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-                color: iconBg, borderRadius: BorderRadius.circular(10)),
-            child: Icon(icon, color: iconColor, size: 18),
-          ),
-          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(value,
-                style: TextStyle(
-                    fontSize: smallValue ? 16 : 22,
-                    fontWeight: FontWeight.w800,
-                    color: valueColor),
+      child: Row(children: [
+        Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(color: bg,
+              borderRadius: BorderRadius.circular(12)),
+          child: Icon(icon, color: color, size: 22),
+        ),
+        const SizedBox(width: 12),
+        Expanded(child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(value, style: TextStyle(
+                fontSize: 24, fontWeight: FontWeight.w900, color: color),
                 overflow: TextOverflow.ellipsis, maxLines: 1),
-            Text(label,
-                style: const TextStyle(
-                    fontSize: 11, color: WTheme.textGray),
-                overflow: TextOverflow.ellipsis, maxLines: 2),
-          ]),
-        ],
-      ),
+            Text(label, style: const TextStyle(
+                fontSize: 11, color: WTheme.textGray),
+                overflow: TextOverflow.ellipsis, maxLines: 1),
+          ],
+        )),
+      ]),
     );
   }
 }
 
-// ─── Lista de solicitações recebidas ─────────────────────────────────────────
-class _RequestsList extends StatelessWidget {
-  final WorkerController ctrl;
-  const _RequestsList({required this.ctrl});
-
-  @override
-  Widget build(BuildContext context) {
-    return Obx(() {
-      final orders = ctrl.newOrders;
-      if (orders.isEmpty && ctrl.isLoadingOrders.value) {
-        return const Padding(
-          padding: EdgeInsets.all(32),
-          child: Center(child: CircularProgressIndicator.adaptive()),
-        );
-      }
-      return Padding(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            const Expanded(
-              child: Text('Solicitações recebidas',
-                  style: TextStyle(
-                      fontSize: 15, fontWeight: FontWeight.w700,
-                      color: WTheme.textDark),
-                  overflow: TextOverflow.ellipsis, maxLines: 1),
-            ),
-            GestureDetector(
-              onTap: () {},
-              child: const Text('Ver todas',
-                  style: TextStyle(
-                      fontSize: 12,
-                      color: WTheme.blue,
-                      fontWeight: FontWeight.w600)),
-            ),
-          ]),
-          const SizedBox(height: 10),
-          if (orders.isEmpty)
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: WTheme.border),
-              ),
-              child: const Row(children: [
-                Icon(Icons.check_circle_rounded,
-                    color: WTheme.green, size: 22),
-                SizedBox(width: 10),
-                Expanded(
-                  child: Text('Sem novas solicitações no momento.',
-                      style: TextStyle(
-                          color: WTheme.textGray, fontSize: 13),
-                      overflow: TextOverflow.ellipsis, maxLines: 2),
-                ),
-              ]),
-            )
-          else
-            ...orders.take(3).map((o) => _RequestCard(order: o, ctrl: ctrl)),
-        ]),
-      );
-    });
-  }
-}
-
-class _RequestCard extends StatelessWidget {
-  final OrderModel order;
-  final WorkerController ctrl;
-  const _RequestCard({required this.order, required this.ctrl});
+class _EarningCard extends StatelessWidget {
+  final String label;
+  final String value;
+  final IconData icon;
+  final Color color;
+  const _EarningCard({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.color,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: WTheme.border),
         boxShadow: const [
-          BoxShadow(
-              color: Color(0x0A000000),
-              blurRadius: 6,
-              offset: Offset(0, 2)),
+          BoxShadow(color: Color(0x0A000000),
+              blurRadius: 4, offset: Offset(0, 2)),
         ],
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(children: [
-          // Foto + info cliente
-          Row(children: [
-            CircleAvatar(
-              radius: 22,
-              backgroundColor: WTheme.blue.withOpacity(0.1),
-              child: Text(
-                order.clientName?.isNotEmpty == true
-                    ? order.clientName![0].toUpperCase()
-                    : 'C',
-                style: const TextStyle(
-                    fontWeight: FontWeight.w700,
-                    color: WTheme.blue, fontSize: 17),
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(order.clientName ?? 'Cliente',
-                      style: const TextStyle(
-                          fontWeight: FontWeight.w700, fontSize: 14),
-                      maxLines: 1, overflow: TextOverflow.ellipsis),
-                  Text(order.serviceCategory,
-                      style: const TextStyle(
-                          fontSize: 12, color: WTheme.textGray),
-                      maxLines: 1, overflow: TextOverflow.ellipsis),
-                ],
-              ),
-            ),
-            // Distância (placeholder)
-            const Text('2,5 km',
-                style: TextStyle(
-                    fontSize: 12, color: WTheme.blue,
-                    fontWeight: FontWeight.w600)),
-          ]),
-          const SizedBox(height: 10),
-          // Localização
-          Row(children: [
-            const Icon(Icons.location_on_outlined,
-                size: 14, color: WTheme.textGray),
-            const SizedBox(width: 4),
-            Expanded(
-              child: Text(order.address.fullAddress,
-                  style: const TextStyle(
-                      fontSize: 12, color: WTheme.textGray),
-                  maxLines: 1, overflow: TextOverflow.ellipsis),
-            ),
-          ]),
-          const SizedBox(height: 4),
-          // Horário
-          Row(children: [
-            const Icon(Icons.access_time, size: 14, color: WTheme.textGray),
-            const SizedBox(width: 4),
-            Expanded(
-              child: Text(
-                DateFormat('dd/MM · HH:mm', 'pt_BR')
-                    .format(order.scheduledAt),
-                style: const TextStyle(
-                    fontSize: 12, color: WTheme.textGray),
-                overflow: TextOverflow.ellipsis, maxLines: 1,
-              ),
-            ),
-            if (order.price != null)
-              Text(
-                'R\$ ${order.price!.toStringAsFixed(2).replaceAll('.', ',')}',
-                style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: WTheme.blue),
-              ),
-          ]),
-          const SizedBox(height: 12),
-          // Botões
-          Row(children: [
-            Expanded(
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: WTheme.blue,
-                  minimumSize: const Size(0, 38),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10)),
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                ),
-                onPressed: () => ctrl.acceptOrder(order),
-                child: const Text('Aceitar',
-                    style: TextStyle(fontSize: 13, color: Colors.white),
-                    overflow: TextOverflow.ellipsis),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: OutlinedButton(
-                style: OutlinedButton.styleFrom(
-                  minimumSize: const Size(0, 38),
-                  side: const BorderSide(color: WTheme.border),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10)),
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                ),
-                onPressed: () => Get.toNamed(AppRoutes.orderDetail,
-                    arguments: {'order': order, 'isWorker': true}),
-                child: const Text('Detalhes',
-                    style: TextStyle(
-                        fontSize: 13, color: WTheme.textGray),
-                    overflow: TextOverflow.ellipsis),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: OutlinedButton(
-                style: OutlinedButton.styleFrom(
-                  minimumSize: const Size(0, 38),
-                  foregroundColor: WTheme.red,
-                  side: const BorderSide(color: WTheme.red),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10)),
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                ),
-                onPressed: () => ctrl.refuseOrder(order),
-                child: const Text('Recusar',
-                    style: TextStyle(fontSize: 13),
-                    overflow: TextOverflow.ellipsis),
-              ),
-            ),
-          ]),
-        ]),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Icon(icon, color: color, size: 18),
+        const SizedBox(height: 6),
+        Text(value, style: TextStyle(
+            fontSize: 13, fontWeight: FontWeight.w800, color: color),
+            overflow: TextOverflow.ellipsis, maxLines: 1),
+        Text(label, style: const TextStyle(
+            fontSize: 10, color: WTheme.textGray),
+            overflow: TextOverflow.ellipsis, maxLines: 1),
+      ]),
+    );
+  }
+}
+
+class _ChartCard extends StatelessWidget {
+  final Widget child;
+  const _ChartCard({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.fromLTRB(12, 16, 12, 8),
+      height: 180,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: WTheme.border),
+        boxShadow: const [
+          BoxShadow(color: Color(0x0A000000),
+              blurRadius: 6, offset: Offset(0, 2)),
+        ],
       ),
+      child: child,
     );
   }
 }
