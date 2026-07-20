@@ -7,11 +7,11 @@ enum OrderStatus { pending, accepted, inProgress, done, cancelled }
 class OrderModel extends Equatable {
   final String id;
   final String userId;
-  final String workerId;
+  final String? workerId; // null até um prestador aceitar
   final String serviceCategory;
   final String description;
   final List<String> photoUrls;
-  final DateTime scheduledAt;
+  final DateTime? scheduledAt; // definido pelo prestador ao aceitar/agendar
   final OrderStatus status;
   final UserAddress address;
   final double? price;
@@ -31,11 +31,11 @@ class OrderModel extends Equatable {
   const OrderModel({
     required this.id,
     required this.userId,
-    required this.workerId,
+    this.workerId,
     required this.serviceCategory,
     required this.description,
     this.photoUrls = const [],
-    required this.scheduledAt,
+    this.scheduledAt, // null quando cliente cria o pedido
     this.status = OrderStatus.pending,
     required this.address,
     this.price,
@@ -53,12 +53,11 @@ class OrderModel extends Equatable {
     return OrderModel(
       id: docId,
       userId: map['userId'] ?? '',
-      workerId: map['workerId'] ?? '',
+      workerId: map['workerId'] as String?,
       serviceCategory: map['serviceCategory'] ?? '',
       description: map['description'] ?? '',
       photoUrls: List<String>.from(map['photoUrls'] ?? []),
-      scheduledAt:
-          (map['scheduledAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      scheduledAt: (map['scheduledAt'] as Timestamp?)?.toDate(),
       status: OrderStatus.values.firstWhere(
         (e) => e.name == (map['status'] ?? 'pending'),
         orElse: () => OrderStatus.pending,
@@ -78,11 +77,11 @@ class OrderModel extends Equatable {
 
   Map<String, dynamic> toMap() => {
         'userId': userId,
-        'workerId': workerId,
+        'workerId': workerId ?? '',
         'serviceCategory': serviceCategory,
         'description': description,
         'photoUrls': photoUrls,
-        'scheduledAt': Timestamp.fromDate(scheduledAt),
+        if (scheduledAt != null) 'scheduledAt': Timestamp.fromDate(scheduledAt!),
         'status': status.name,
         'address': address.toMap(),
         'price': price,
@@ -101,6 +100,9 @@ class OrderModel extends Equatable {
       };
 
   OrderModel copyWith({
+    String? workerId,
+    String? workerName,
+    DateTime? scheduledAt,
     OrderStatus? status,
     double? price,
     DateTime? updatedAt,
@@ -113,11 +115,11 @@ class OrderModel extends Equatable {
     return OrderModel(
       id: id,
       userId: userId,
-      workerId: workerId,
+      workerId: workerId ?? this.workerId,
       serviceCategory: serviceCategory,
       description: description,
       photoUrls: photoUrls ?? this.photoUrls,
-      scheduledAt: scheduledAt,
+      scheduledAt: scheduledAt ?? this.scheduledAt,
       status: status ?? this.status,
       address: address,
       price: price ?? this.price,
@@ -141,6 +143,7 @@ class OrderModel extends Equatable {
   bool get canWorkerAccept => status == OrderStatus.pending;
   bool get canWorkerStart => status == OrderStatus.accepted;
   bool get canWorkerComplete => status == OrderStatus.inProgress;
+  bool get isScheduled => scheduledAt != null && scheduledAt!.isAfter(DateTime.now());
 
   @override
   List<Object?> get props => [id, userId, workerId, status, createdAt];
