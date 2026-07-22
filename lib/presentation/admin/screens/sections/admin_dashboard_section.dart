@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 
 import '../../../../core/utils/formatters.dart';
 import '../../../../data/models/admin_log_model.dart';
+import '../../../../data/models/order_model.dart';
 import '../../../../data/models/worker_model.dart';
 import '../../admin_theme.dart';
 import '../../controllers/admin_controller.dart';
@@ -30,6 +31,18 @@ class AdminDashboardSection extends StatelessWidget {
 
             // ── Cards KPI ────────────────────────────────────────────────
             _KpiGrid(ctrl: ctrl),
+            const SizedBox(height: 24),
+
+            // ── Operação em tempo real (fluxo 99) ────────────────────────
+            const _SectionHeader(title: 'Operação em Tempo Real'),
+            const SizedBox(height: 12),
+            _LiveOperationsCard(ctrl: ctrl),
+            const SizedBox(height: 24),
+
+            // ── Indicadores financeiros da plataforma ────────────────────
+            const _SectionHeader(title: 'Financeiro da Plataforma'),
+            const SizedBox(height: 12),
+            _PlatformFinanceCard(ctrl: ctrl),
             const SizedBox(height: 24),
 
             // ── Prestadores pendentes ─────────────────────────────────────
@@ -768,7 +781,7 @@ class _BarChartCard extends StatelessWidget {
                     int m = now.month - (5 - v.toInt());
                     if (m <= 0) m += 12;
                     return Text(
-                      DateFormat.MMM('pt').format(DateTime(2024, m)),
+                      DateFormat.MMM('pt_BR').format(DateTime(2024, m)),
                       style: const TextStyle(
                           fontSize: 10, color: AdminTheme.textGray),
                     );
@@ -1273,6 +1286,345 @@ class _EmptyCard extends StatelessWidget {
               overflow: TextOverflow.ellipsis, maxLines: 2),
         ),
       ]),
+    );
+  }
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Operação em tempo real (fluxo estilo 99)
+// ═══════════════════════════════════════════════════════════════════════════
+class _LiveOperationsCard extends StatelessWidget {
+  final AdminController ctrl;
+  const _LiveOperationsCard({required this.ctrl});
+
+  @override
+  Widget build(BuildContext context) {
+    return Obx(() {
+      final active = ctrl.activeServices;
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AdminTheme.border),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(children: [
+              _LivePill(
+                  label: 'Em deslocamento',
+                  count: ctrl.servicesEnRoute,
+                  color: AdminTheme.primary,
+                  icon: Icons.directions_car_rounded),
+              const SizedBox(width: 8),
+              _LivePill(
+                  label: 'No local',
+                  count: ctrl.servicesOnSite,
+                  color: const Color(0xFF2196F3),
+                  icon: Icons.location_on_rounded),
+              const SizedBox(width: 8),
+              _LivePill(
+                  label: 'Em execução',
+                  count: ctrl.servicesRunning,
+                  color: AdminTheme.purple,
+                  icon: Icons.timer_rounded),
+            ]),
+            const SizedBox(height: 14),
+            if (active.isEmpty)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 12),
+                child: Center(
+                  child: Text('Nenhum serviço ativo no momento.',
+                      style: TextStyle(
+                          fontSize: 12.5,
+                          color: AdminTheme.textGray)),
+                ),
+              )
+            else
+              ...active.take(6).map((o) => _ActiveServiceTile(order: o)),
+          ],
+        ),
+      );
+    });
+  }
+}
+
+class _LivePill extends StatelessWidget {
+  final String label;
+  final int count;
+  final Color color;
+  final IconData icon;
+  const _LivePill({
+    required this.label,
+    required this.count,
+    required this.color,
+    required this.icon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color.withOpacity(0.3)),
+        ),
+        child: Column(children: [
+          Icon(icon, color: color, size: 17),
+          const SizedBox(height: 4),
+          Text('$count',
+              style: TextStyle(
+                  fontSize: 18,
+                  color: color,
+                  fontWeight: FontWeight.w900)),
+          Text(label,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                  fontSize: 9.5, color: AdminTheme.textGray),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis),
+        ]),
+      ),
+    );
+  }
+}
+
+/// Linha de serviço ativo com cronômetro ao vivo quando em execução.
+class _ActiveServiceTile extends StatefulWidget {
+  final OrderModel order;
+  const _ActiveServiceTile({required this.order});
+
+  @override
+  State<_ActiveServiceTile> createState() => _ActiveServiceTileState();
+}
+
+class _ActiveServiceTileState extends State<_ActiveServiceTile> {
+  late final Stream<int> _tick;
+
+  @override
+  void initState() {
+    super.initState();
+    _tick = Stream.periodic(const Duration(seconds: 1), (i) => i);
+  }
+
+  String _elapsed() {
+    final started = widget.order.startedAt;
+    if (started == null) return '--:--:--';
+    final d = DateTime.now().difference(started);
+    if (d.isNegative) return '00:00:00';
+    final h = d.inHours.toString().padLeft(2, '0');
+    final m = (d.inMinutes % 60).toString().padLeft(2, '0');
+    final s = (d.inSeconds % 60).toString().padLeft(2, '0');
+    return '$h:$m:$s';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final o = widget.order;
+    Color color;
+    String label;
+    IconData icon;
+    switch (o.status) {
+      case OrderStatus.accepted:
+        color = AdminTheme.primary;
+        label = 'Deslocamento';
+        icon = Icons.directions_car_rounded;
+        break;
+      case OrderStatus.arrived:
+        color = const Color(0xFF2196F3);
+        label = 'No local';
+        icon = Icons.location_on_rounded;
+        break;
+      default:
+        color = AdminTheme.purple;
+        label = 'Executando';
+        icon = Icons.timer_rounded;
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: AdminTheme.background,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(children: [
+        Icon(icon, color: color, size: 16),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                  '${o.serviceCategory} · '
+                  '${o.workerName ?? 'Prestador'}',
+                  style: const TextStyle(
+                      fontSize: 12.5, fontWeight: FontWeight.w700),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis),
+              Text(o.clientName ?? 'Cliente',
+                  style: const TextStyle(
+                      fontSize: 11, color: AdminTheme.textGray),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis),
+            ],
+          ),
+        ),
+        if (o.status == OrderStatus.inProgress)
+          StreamBuilder<int>(
+            stream: _tick,
+            builder: (_, __) => Text(_elapsed(),
+                style: TextStyle(
+                    fontSize: 12.5,
+                    color: color,
+                    fontWeight: FontWeight.w800,
+                    fontFeatures: const [
+                      FontFeature.tabularFigures()
+                    ])),
+          )
+        else
+          Text(label,
+              style: TextStyle(
+                  fontSize: 11,
+                  color: color,
+                  fontWeight: FontWeight.w800)),
+      ]),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Financeiro da plataforma (KPIs derivados de financial_records)
+// ═══════════════════════════════════════════════════════════════════════════
+class _PlatformFinanceCard extends StatelessWidget {
+  final AdminController ctrl;
+  const _PlatformFinanceCard({required this.ctrl});
+
+  @override
+  Widget build(BuildContext context) {
+    final money = NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$');
+
+    return Obx(() {
+      final avgCat = ctrl.avgByCategory.entries.toList()
+        ..sort((a, b) => b.value.compareTo(a.value));
+      final avgMin = ctrl.avgDurationMinutes;
+      final avgLabel = avgMin >= 60
+          ? '${avgMin ~/ 60}h ${avgMin % 60}min'
+          : '${avgMin}min';
+
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AdminTheme.border),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(children: [
+              _FinanceStat(
+                  label: 'Faturamento bruto',
+                  value: money.format(ctrl.grossRevenue),
+                  color: AdminTheme.primary),
+              _FinanceStat(
+                  label: 'Receita da plataforma',
+                  value: money.format(ctrl.platformRevenue),
+                  color: AdminTheme.green),
+            ]),
+            const SizedBox(height: 12),
+            Row(children: [
+              _FinanceStat(
+                  label: 'Repasse aos prestadores',
+                  value: money.format(ctrl.workersNetTotal),
+                  color: AdminTheme.amber),
+              _FinanceStat(
+                  label: 'Serviços concluídos',
+                  value: '${ctrl.completedServicesCount}',
+                  color: AdminTheme.purple),
+            ]),
+            const SizedBox(height: 12),
+            Row(children: [
+              _FinanceStat(
+                  label: 'Ticket médio',
+                  value: money.format(ctrl.avgTicket),
+                  color: const Color(0xFF00838F)),
+              _FinanceStat(
+                  label: 'Tempo médio',
+                  value: avgLabel,
+                  color: const Color(0xFF5D4037)),
+            ]),
+            if (avgCat.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              const Text('Valor médio por categoria',
+                  style: TextStyle(
+                      fontSize: 12.5, fontWeight: FontWeight.w800)),
+              const SizedBox(height: 8),
+              ...avgCat.take(5).map((e) => Padding(
+                    padding: const EdgeInsets.only(bottom: 6),
+                    child: Row(children: [
+                      Expanded(
+                          child: Text(e.key,
+                              style: const TextStyle(
+                                  fontSize: 12,
+                                  color: AdminTheme.textGray),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis)),
+                      Text(money.format(e.value),
+                          style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w800)),
+                    ]),
+                  )),
+            ],
+          ],
+        ),
+      );
+    });
+  }
+}
+
+class _FinanceStat extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color color;
+  const _FinanceStat({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(value,
+                  style: TextStyle(
+                      fontSize: 16,
+                      color: color,
+                      fontWeight: FontWeight.w900)),
+            ),
+            const SizedBox(height: 2),
+            Text(label,
+                style: const TextStyle(
+                    fontSize: 10.5, color: AdminTheme.textGray),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis),
+          ],
+        ),
+      ),
     );
   }
 }

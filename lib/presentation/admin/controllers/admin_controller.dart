@@ -9,6 +9,7 @@ import '../../../core/services/firebase_service.dart';
 import '../../../data/datasources/admin_datasource.dart';
 import '../../../data/datasources/firestore_datasource.dart';
 import '../../../data/models/admin_log_model.dart';
+import '../../../data/models/financial_record_model.dart';
 import '../../../data/models/order_model.dart';
 import '../../../data/models/report_model.dart';
 import '../../../data/models/review_model.dart';
@@ -42,6 +43,14 @@ class AdminController extends GetxController {
 
   // ─── Pedidos ──────────────────────────────────────────────────────────────
   final allOrders = <OrderModel>[].obs;
+
+  // ─── Operação em tempo real (fluxo 99) ────────────────────────────────────
+  // Serviços ativos: prestadores em deslocamento (accepted), no local
+  // (arrived) e com cronômetro em execução (inProgress).
+  final activeServices = <OrderModel>[].obs;
+
+  // ─── Registros financeiros (KPIs da plataforma) ───────────────────────────
+  final financialRecords = <FinancialRecordModel>[].obs;
 
   // ─── Denúncias ────────────────────────────────────────────────────────────
   final allReports = <ReportModel>[].obs;
@@ -77,6 +86,8 @@ class AdminController extends GetxController {
     _subscribeReports();
     _subscribeReviews();
     _subscribeLogs();
+    _subscribeActiveServices();
+    _subscribeFinancialRecords();
   }
 
   @override
@@ -107,6 +118,64 @@ class AdminController extends GetxController {
     } finally {
       isLoadingDashboard.value = false;
     }
+  }
+
+  // ─── Operação ao vivo + financeiro (fluxo 99) ─────────────────────────────
+
+  void _subscribeActiveServices() {
+    _subs.add(_fds.watchActiveServiceOrders().listen((list) {
+      activeServices.assignAll(list);
+    }, onError: (_) {}));
+  }
+
+  void _subscribeFinancialRecords() {
+    _subs.add(_fds.watchAllFinancialRecords().listen((list) {
+      financialRecords.assignAll(list);
+    }, onError: (_) {}));
+  }
+
+  // Contadores de operação
+  int get servicesEnRoute => activeServices
+      .where((o) => o.status == OrderStatus.accepted)
+      .length;
+  int get servicesOnSite => activeServices
+      .where((o) => o.status == OrderStatus.arrived)
+      .length;
+  int get servicesRunning => activeServices
+      .where((o) => o.status == OrderStatus.inProgress)
+      .length;
+
+  // KPIs financeiros (derivados dos registros — cálculo fora da UI)
+  double get grossRevenue =>
+      financialRecords.fold(0.0, (s, r) => s + r.grossAmount);
+  double get platformRevenue =>
+      financialRecords.fold(0.0, (s, r) => s + r.platformFeeAmount);
+  double get workersNetTotal =>
+      financialRecords.fold(0.0, (s, r) => s + r.netAmount);
+  int get completedServicesCount => financialRecords.length;
+
+  double get avgTicket => financialRecords.isEmpty
+      ? 0
+      : grossRevenue / financialRecords.length;
+
+  int get avgDurationMinutes => financialRecords.isEmpty
+      ? 0
+      : (financialRecords.fold<int>(
+                  0, (s, r) => s + r.durationMinutes) /
+              financialRecords.length)
+          .round();
+
+  /// Valor médio por categoria: {categoria: média do bruto}.
+  Map<String, double> get avgByCategory {
+    final sums = <String, double>{};
+    final counts = <String, int>{};
+    for (final r in financialRecords) {
+      sums[r.category] = (sums[r.category] ?? 0) + r.grossAmount;
+      counts[r.category] = (counts[r.category] ?? 0) + 1;
+    }
+    return {
+      for (final e in sums.entries) e.key: e.value / (counts[e.key] ?? 1)
+    };
   }
 
   Future<void> refreshDashboard() => _loadDashboard();

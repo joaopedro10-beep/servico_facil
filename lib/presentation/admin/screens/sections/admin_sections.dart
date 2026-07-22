@@ -44,6 +44,7 @@ class _OrderCard extends StatelessWidget {
     switch (order.status) {
       case OrderStatus.pending:    return AdminTheme.amber;
       case OrderStatus.accepted:   return AdminTheme.primary;
+      case OrderStatus.arrived:    return AdminTheme.primary;
       case OrderStatus.inProgress: return AdminTheme.purple;
       case OrderStatus.done:       return AdminTheme.green;
       case OrderStatus.cancelled:  return AdminTheme.red;
