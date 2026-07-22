@@ -4,6 +4,8 @@ import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/constants/app_colors.dart';
+import '../../../core/constants/app_routes.dart';
+import '../../../core/services/firebase_service.dart';
 import '../../../data/models/order_model.dart';
 import '../controllers/order_controller.dart';
 
@@ -12,12 +14,35 @@ class OrderDetailScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final args = Get.arguments as Map<String, dynamic>;
-    final initialOrder = args['order'] as OrderModel;
-    final isWorker = args['isWorker'] as bool? ?? false;
+    // CORREÇÃO: esta tela era aberta com argumentos em formatos diferentes
+    // (Map{'order'}, Map{'orderId'}, OrderModel puro, String) e quebrava
+    // com cast inválido — ex.: ao tocar em uma notificação. Agora todos os
+    // formatos são aceitos; quando só há o id, o pedido é carregado via
+    // stream e a tela mostra um loading até chegar.
+    final args = Get.arguments;
+    OrderModel? initialOrder;
+    String? orderId;
+    bool? isWorkerArg;
 
-    final ctrl = Get.find<OrderController>()
-      ..watchOrder(initialOrder.id);
+    if (args is OrderModel) {
+      initialOrder = args;
+    } else if (args is String) {
+      orderId = args;
+    } else if (args is Map) {
+      final map = Map<String, dynamic>.from(args);
+      initialOrder = map['order'] as OrderModel?;
+      orderId = map['orderId'] as String? ?? initialOrder?.id;
+      isWorkerArg = map['isWorker'] as bool?;
+    }
+    orderId ??= initialOrder?.id;
+    final resolvedOrderId = orderId ?? '';
+
+    final ctrl = Get.find<OrderController>();
+    if (resolvedOrderId.isNotEmpty) {
+      ctrl.watchOrder(resolvedOrderId);
+    }
+
+    final uid = Get.find<FirebaseService>().currentUser?.uid ?? '';
 
     return Scaffold(
       appBar: AppBar(
@@ -25,6 +50,7 @@ class OrderDetailScreen extends StatelessWidget {
         actions: [
           Obx(() {
             final o = ctrl.currentOrder.value ?? initialOrder;
+            if (o == null) return const SizedBox.shrink();
             return IconButton(
               tooltip: 'Abrir chat',
               icon: const Icon(Icons.chat_bubble_outline),
@@ -35,6 +61,25 @@ class OrderDetailScreen extends StatelessWidget {
       ),
       body: Obx(() {
         final order = ctrl.currentOrder.value ?? initialOrder;
+
+        if (order == null) {
+          // Ainda carregando pelo id (ou id inválido)
+          if (resolvedOrderId.isEmpty) {
+            return const Center(
+              child: Text('Pedido não encontrado.',
+                  style: TextStyle(color: AppColors.textSecondary)),
+            );
+          }
+          return const Center(
+              child: CircularProgressIndicator.adaptive());
+        }
+
+        // Se 'isWorker' não veio nos argumentos, infere pelo usuário logado
+        final isWorker = isWorkerArg ??
+            (order.workerId != null &&
+                order.workerId!.isNotEmpty &&
+                order.workerId == uid);
+
         return ListView(
           padding: const EdgeInsets.all(16),
           children: [
@@ -45,6 +90,12 @@ class OrderDetailScreen extends StatelessWidget {
             // ── Dados do serviço ─────────────────────────────────────────
             _buildServiceInfo(order),
             const SizedBox(height: 20),
+
+            // ── Resumo financeiro (após a conclusão) ─────────────────────
+            if (order.grossAmount != null) ...[
+              _buildFinancialSummary(order),
+              const SizedBox(height: 20),
+            ],
 
             // ── Fotos ────────────────────────────────────────────────────
             if (order.photoUrls.isNotEmpty) ...[
@@ -117,37 +168,113 @@ class OrderDetailScreen extends StatelessWidget {
       ];
     }
 
+    // Barra de progresso estilo apps de transporte:
+    // Prestador aceitou → Em deslocamento → Chegou ao local →
+    // Serviço em execução → Serviço finalizado
+    final s = order.status;
+    final afterAccept = s == OrderStatus.accepted ||
+        s == OrderStatus.arrived ||
+        s == OrderStatus.inProgress ||
+        s == OrderStatus.done;
+    final afterArrive = s == OrderStatus.arrived ||
+        s == OrderStatus.inProgress ||
+        s == OrderStatus.done;
+    final afterStart =
+        s == OrderStatus.inProgress || s == OrderStatus.done;
+
     return [
       _StepData(
-        label: 'Solicitado',
-        icon: Icons.send_rounded,
-        timestamp: order.createdAt,
-        isDone: true,
-        isActive: order.status == OrderStatus.pending,
-      ),
-      _StepData(
-        label: 'Aceito',
+        label: order.status == OrderStatus.pending
+            ? 'Buscando profissional'
+            : 'Prestador aceitou',
         icon: Icons.check_circle_outline,
-        timestamp: order.acceptedAt,
-        isDone: order.status != OrderStatus.pending,
-        isActive: order.status == OrderStatus.accepted,
+        timestamp: order.acceptedAt ?? order.createdAt,
+        isDone: afterAccept,
+        isActive: s == OrderStatus.pending,
       ),
       _StepData(
-        label: 'Em andamento',
+        label: 'Em deslocamento',
+        icon: Icons.directions_car_outlined,
+        timestamp: order.acceptedAt,
+        isDone: afterArrive,
+        isActive: s == OrderStatus.accepted,
+      ),
+      _StepData(
+        label: 'Chegou ao local',
+        icon: Icons.location_on_outlined,
+        timestamp: order.arrivedAt,
+        isDone: afterStart,
+        isActive: s == OrderStatus.arrived,
+      ),
+      _StepData(
+        label: 'Serviço em execução',
         icon: Icons.engineering_outlined,
         timestamp: order.startedAt,
-        isDone: order.status == OrderStatus.inProgress ||
-            order.status == OrderStatus.done,
-        isActive: order.status == OrderStatus.inProgress,
+        isDone: s == OrderStatus.done,
+        isActive: s == OrderStatus.inProgress,
       ),
       _StepData(
-        label: 'Concluído',
+        label: 'Serviço finalizado',
         icon: Icons.celebration_outlined,
         timestamp: order.completedAt,
-        isDone: order.status == OrderStatus.done,
-        isActive: order.status == OrderStatus.done,
+        isDone: s == OrderStatus.done,
+        isActive: s == OrderStatus.done,
       ),
     ];
+  }
+
+  // ─── Resumo financeiro ────────────────────────────────────────────────────
+
+  Widget _buildFinancialSummary(OrderModel order) {
+    final money =
+        NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$');
+    String duration() {
+      final m = order.durationMinutes ?? 0;
+      final h = m ~/ 60;
+      final min = m % 60;
+      if (h == 0) return '${min}min';
+      if (min == 0) return '${h}h';
+      return '${h}h ${min}min';
+    }
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Resumo financeiro',
+                style:
+                    TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 12),
+            _InfoRow(
+                icon: Icons.timer_outlined,
+                label: 'Tempo trabalhado',
+                value: duration()),
+            if (order.hourlyRate != null)
+              _InfoRow(
+                  icon: Icons.payments_outlined,
+                  label: 'Valor da hora',
+                  value: money.format(order.hourlyRate)),
+            _InfoRow(
+                icon: Icons.attach_money_rounded,
+                label: 'Valor bruto',
+                value: money.format(order.grossAmount)),
+            if (order.platformFeeAmount != null)
+              _InfoRow(
+                  icon: Icons.percent_rounded,
+                  label:
+                      'Comissão (${order.platformFeePercent?.toStringAsFixed(0) ?? '-'}%)',
+                  value: '- ${money.format(order.platformFeeAmount)}'),
+            if (order.netAmount != null)
+              _InfoRow(
+                  icon: Icons.account_balance_wallet_outlined,
+                  label: 'Líquido do prestador',
+                  value: money.format(order.netAmount)),
+          ],
+        ),
+      ),
+    );
   }
 
   // ─── Info do serviço ──────────────────────────────────────────────────────
@@ -388,20 +515,21 @@ class OrderDetailScreen extends StatelessWidget {
               ),
               const SizedBox(height: 10),
             ],
-            if (order.canWorkerStart)
+            // No novo fluxo, as mudanças de status do atendimento
+            // (chegada, início, finalização) acontecem SOMENTE pelo botão
+            // deslizante na tela de navegação — aqui apenas redirecionamos.
+            if (order.isOngoing)
               ElevatedButton.icon(
-                onPressed:
-                    ctrl.isSaving.value ? null : ctrl.startOrder,
-                icon: const Icon(Icons.engineering_outlined),
-                label: const Text('Iniciar serviço'),
-              ),
-            if (order.canWorkerComplete)
-              ElevatedButton.icon(
-                onPressed: ctrl.isSaving.value
-                    ? null
-                    : () => _confirmComplete(context, ctrl),
-                icon: const Icon(Icons.celebration_outlined),
-                label: const Text('Concluir serviço'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF1D9E75),
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size.fromHeight(48),
+                ),
+                onPressed: () => Get.toNamed(
+                    AppRoutes.workerNavigation,
+                    arguments: {'orderId': order.id}),
+                icon: const Icon(Icons.navigation_rounded),
+                label: const Text('Abrir atendimento (mapa)'),
               ),
           ],
         ));
@@ -433,26 +561,6 @@ class OrderDetailScreen extends StatelessWidget {
     await ctrl.scheduleOrder(scheduledAt);
   }
 
-  Future<void> _confirmComplete(
-      BuildContext context, OrderController ctrl) async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Concluir serviço?'),
-        content: const Text(
-            'Confirme que o serviço foi finalizado. O cliente receberá uma notificação para avaliar.'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Voltar')),
-          ElevatedButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Confirmar conclusão')),
-        ],
-      ),
-    );
-    if (confirm == true) ctrl.completeOrder();
-  }
 }
 
 // ─── Widgets auxiliares ───────────────────────────────────────────────────────

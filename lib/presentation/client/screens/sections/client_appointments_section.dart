@@ -280,6 +280,8 @@ class _OrderCard extends StatelessWidget {
         return CTheme.amber;
       case OrderStatus.accepted:
         return order.isScheduled ? CTheme.primary : const Color(0xFF2196F3);
+      case OrderStatus.arrived:
+        return const Color(0xFF2196F3);
       case OrderStatus.inProgress:
         return const Color(0xFF8B5CF6);
       case OrderStatus.done:
@@ -295,6 +297,8 @@ class _OrderCard extends StatelessWidget {
         return 'Aguardando profissional';
       case OrderStatus.accepted:
         return order.isScheduled ? 'Agendado' : 'Aceito';
+      case OrderStatus.arrived:
+        return 'Chegou ao local';
       case OrderStatus.inProgress:
         return 'Em andamento';
       case OrderStatus.done:
@@ -309,6 +313,7 @@ class _OrderCard extends StatelessWidget {
       case OrderStatus.pending:    return Icons.hourglass_empty_rounded;
       case OrderStatus.accepted:   return order.isScheduled
           ? Icons.calendar_today_rounded : Icons.check_circle_rounded;
+      case OrderStatus.arrived:    return Icons.location_on_rounded;
       case OrderStatus.inProgress: return Icons.engineering_rounded;
       case OrderStatus.done:       return Icons.task_alt_rounded;
       case OrderStatus.cancelled:  return Icons.cancel_rounded;

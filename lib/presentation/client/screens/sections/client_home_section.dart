@@ -154,6 +154,11 @@ class _ActiveOrderBanner extends StatelessWidget {
           statusText  = 'Profissional a caminho!';
           statusIcon  = Icons.directions_run_rounded;
           break;
+        case OrderStatus.arrived:
+          statusColor = const Color(0xFF2196F3);
+          statusText  = 'Profissional chegou ao local!';
+          statusIcon  = Icons.location_on_rounded;
+          break;
         case OrderStatus.inProgress:
           statusColor = const Color(0xFF8B5CF6);
           statusText  = 'Serviço em andamento';

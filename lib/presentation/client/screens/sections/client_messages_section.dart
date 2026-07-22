@@ -98,6 +98,7 @@ class ClientMessagesSection extends StatelessWidget {
     switch (o.status) {
       case OrderStatus.pending:    return 'Aguardando confirmação...';
       case OrderStatus.accepted:   return 'Serviço confirmado!';
+      case OrderStatus.arrived:    return 'Cheguei ao local! 📍';
       case OrderStatus.inProgress: return 'Cheguei aqui e já vou iniciar o serviço...';
       case OrderStatus.done:       return 'Serviço concluído com sucesso 👍';
       case OrderStatus.cancelled:  return 'Solicitação cancelada';

@@ -30,6 +30,7 @@ class AppFormatters {
     switch (status) {
       case 'pending': return 'Pendente';
       case 'accepted': return 'Aceito';
+      case 'arrived': return 'Chegou ao local';
       case 'inProgress': return 'Em andamento';
       case 'done': return 'Concluído';
       case 'cancelled': return 'Cancelado';

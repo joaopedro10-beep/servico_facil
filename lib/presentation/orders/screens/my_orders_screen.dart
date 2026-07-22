@@ -326,6 +326,7 @@ String _statusLabel(OrderStatus s) {
   switch (s) {
     case OrderStatus.pending:     return 'Pendente';
     case OrderStatus.accepted:    return 'Aceito';
+    case OrderStatus.arrived:     return 'Chegou ao local';
     case OrderStatus.inProgress:  return 'Em andamento';
     case OrderStatus.done:        return 'Concluído';
     case OrderStatus.cancelled:   return 'Cancelado';
@@ -336,6 +337,7 @@ Color _statusColor(OrderStatus s) {
   switch (s) {
     case OrderStatus.pending:     return AppColors.statusPending;
     case OrderStatus.accepted:    return AppColors.statusAccepted;
+    case OrderStatus.arrived:     return AppColors.statusAccepted;
     case OrderStatus.inProgress:  return AppColors.statusInProgress;
     case OrderStatus.done:        return AppColors.statusDone;
     case OrderStatus.cancelled:   return AppColors.statusCancelled;
