@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 
 import '../../core/errors/app_exceptions.dart';
 import '../../core/services/firebase_service.dart';
+import '../models/financial_record_model.dart';
 import '../models/message_model.dart';
 import '../models/order_model.dart';
 import '../models/report_model.dart';
@@ -75,6 +76,28 @@ class FirestoreDatasource {
     }
   }
 
+  /// Perfil público resumido do cliente para a tela de solicitação:
+  /// nome, telefone, foto e avaliação média (rating no Firestore é soma;
+  /// dividimos por totalReviews).
+  Future<Map<String, dynamic>> getClientPublicProfile(String userId) async {
+    try {
+      final doc = await _fb.usersRef.doc(userId).get();
+      final d = doc.data() ?? {};
+      final sum   = (d['rating'] as num?)?.toDouble() ?? 0.0;
+      final count = (d['totalReviews'] as num?)?.toInt() ?? 0;
+      return {
+        'name':     d['name'] ?? '',
+        'phone':    d['phone'] ?? '',
+        'photoUrl': d['photoUrl'],
+        'rating':   count > 0 ? sum / count : 0.0,
+        'totalReviews': count,
+      };
+    } catch (_) {
+      return {'name': '', 'phone': '', 'photoUrl': null,
+              'rating': 0.0, 'totalReviews': 0};
+    }
+  }
+
   /// Verifica se CPF já está em uso (para validação de perfil).
   Future<bool> isCpfInUse(String cpf, String currentUserId) async {
     try {
@@ -137,6 +160,28 @@ class FirestoreDatasource {
   Future<void> updateWorkerAvailability(
       String workerId, bool isAvailable) async {
     await updateWorker(workerId, {'isAvailable': isAvailable});
+  }
+
+  /// Ids dos prestadores elegíveis de uma categoria (para notificar quando
+  /// um cliente cria uma solicitação). Limitado para evitar excesso de
+  /// escritas — sem Cloud Functions o fan-out é feito no cliente.
+  Future<List<String>> getEligibleWorkerIdsByCategory(
+    String category, {
+    int limit = 20,
+  }) async {
+    try {
+      final snap = await _fb.workersRef
+          .where('isVerified', isEqualTo: true)
+          .where('isAvailable', isEqualTo: true)
+          .where('isSuspended', isEqualTo: false)
+          .where('categories', arrayContains: category)
+          .limit(limit)
+          .get();
+      return snap.docs.map((d) => d.id).toList();
+    } catch (_) {
+      // Falha aqui não pode impedir a criação do pedido.
+      return [];
+    }
   }
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -433,6 +478,9 @@ class FirestoreDatasource {
           'updatedAt':  FieldValue.serverTimestamp(),
         });
         break;
+      case OrderStatus.arrived:
+        await markArrived(orderId);
+        break;
       case OrderStatus.inProgress:
         await startOrder(orderId);
         break;
@@ -473,6 +521,283 @@ class FirestoreDatasource {
         .where('createdAt', isGreaterThan: since)
         .get();
     return snap.size;
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // FLUXO DE ATENDIMENTO (estilo 99) + PRECIFICAÇÃO POR HORA
+  //
+  // accepted → arrived → inProgress → done
+  // Toda a lógica financeira fica AQUI (camada de dados) — a UI apenas exibe.
+  // Todos os marcos usam FieldValue.serverTimestamp() como fonte de verdade.
+  // ══════════════════════════════════════════════════════════════════════════
+
+  /// Normaliza texto para comparação tolerante de categorias:
+  /// minúsculas, sem acentos e sem espaços extras.
+  /// Assim "Eletricista", "eletricista" e "ELETRICISTA " casam entre si.
+  String _normalizeCategory(String s) {
+    const from = 'áàâãäéèêëíìîïóòôõöúùûüçÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇ';
+    const to   = 'aaaaaeeeeiiiiooooouuuucAAAAAEEEEIIIIOOOOOUUUUC';
+    var out = s.trim().toLowerCase();
+    for (var i = 0; i < from.length; i++) {
+      out = out.replaceAll(from[i], to[i].toLowerCase());
+    }
+    return out;
+  }
+
+  double? _rateFromDoc(Map<String, dynamic> d) {
+    final rate = (d['hourlyRate'] ?? d['valorHora'] ?? d['rate']) as num?;
+    final v = rate?.toDouble();
+    return (v != null && v > 0) ? v : null;
+  }
+
+  /// Valor/hora de uma categoria — resolução TOLERANTE, nunca lança.
+  ///
+  /// Ordem de busca:
+  ///  1. categories.where(name == categoria)          (exato)
+  ///  2. categories/{categoria}                       (doc id exato)
+  ///  3. varredura de `categories` comparando name/id normalizados
+  ///     (case-insensitive e sem acentos — "Eletricista" == "eletricista")
+  ///  4. settings/platform.defaultHourlyRate          (config do admin)
+  ///  5. fallback de emergência (R$ 60/h) — o fluxo NUNCA trava por
+  ///     configuração ausente; a origem é retornada para a UI avisar o
+  ///     prestador/admin de que a categoria precisa ser cadastrada.
+  ///
+  /// Retorna (rate, source) onde source ∈
+  /// {'category', 'settingsDefault', 'fallback'}.
+  Future<(double, String)> resolveCategoryHourlyRate(
+      String category) async {
+    // 1) name exato
+    try {
+      final q = await _fb.categoriesRef
+          .where('name', isEqualTo: category)
+          .limit(1)
+          .get();
+      if (q.docs.isNotEmpty) {
+        final v = _rateFromDoc(q.docs.first.data());
+        if (v != null) return (v, 'category');
+      }
+    } catch (_) {}
+
+    // 2) doc id exato
+    try {
+      final doc = await _fb.categoriesRef.doc(category).get();
+      final v = doc.data() == null ? null : _rateFromDoc(doc.data()!);
+      if (v != null) return (v, 'category');
+    } catch (_) {}
+
+    // 3) varredura normalizada (coleção pequena — categorias da plataforma)
+    try {
+      final norm = _normalizeCategory(category);
+      final all = await _fb.categoriesRef.limit(100).get();
+      for (final d in all.docs) {
+        final data = d.data();
+        final name = (data['name'] ?? '').toString();
+        if (_normalizeCategory(name) == norm ||
+            _normalizeCategory(d.id) == norm) {
+          final v = _rateFromDoc(data);
+          if (v != null) return (v, 'category');
+        }
+      }
+    } catch (_) {}
+
+    // 4) default global do admin
+    try {
+      final doc = await _fb.platformSettingsRef.get();
+      final v =
+          (doc.data()?['defaultHourlyRate'] as num?)?.toDouble();
+      if (v != null && v > 0) return (v, 'settingsDefault');
+    } catch (_) {}
+
+    // 5) emergência — mantém o serviço operante; UI exibe aviso
+    return (60.0, 'fallback');
+  }
+
+  /// Compatibilidade: retorna apenas o valor (sem a origem).
+  Future<double> getCategoryHourlyRate(String category) async {
+    final (rate, _) = await resolveCategoryHourlyRate(category);
+    return rate;
+  }
+
+  /// Percentual de comissão da plataforma (config global do administrador).
+  /// Lido de settings/platform.platformFeePercent. Default seguro: 15%.
+  Future<double> getPlatformFeePercent() async {
+    try {
+      final doc = await _fb.platformSettingsRef.get();
+      final pct = (doc.data()?['platformFeePercent'] as num?)?.toDouble();
+      if (pct != null && pct >= 0 && pct <= 100) return pct;
+      return 15.0;
+    } catch (_) {
+      return 15.0;
+    }
+  }
+
+  /// Prestador chegou ao local: accepted → arrived.
+  Future<void> markArrived(String orderId) async {
+    try {
+      await _fb.ordersRef.doc(orderId).update({
+        'status':    'arrived',
+        'arrivedAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    } on FirebaseException catch (e) {
+      throw ServerException('Erro ao registrar chegada: ${e.message}');
+    }
+  }
+
+  /// Inicia o serviço: arrived → inProgress.
+  ///
+  /// Grava startedAt com serverTimestamp() (o cronômetro NUNCA usa o relógio
+  /// do dispositivo como origem) e congela o snapshot financeiro
+  /// (hourlyRate + platformFeePercent) no pedido.
+  Future<void> startServiceTimer(
+    String orderId, {
+    required double hourlyRate,
+    required double platformFeePercent,
+  }) async {
+    try {
+      await _fb.ordersRef.doc(orderId).update({
+        'status':             'inProgress',
+        'startedAt':          FieldValue.serverTimestamp(),
+        'hourlyRate':         hourlyRate,
+        'platformFeePercent': platformFeePercent,
+        'updatedAt':          FieldValue.serverTimestamp(),
+      });
+    } on FirebaseException catch (e) {
+      throw ServerException('Erro ao iniciar o serviço: ${e.message}');
+    }
+  }
+
+  /// Finaliza o serviço: inProgress → done (completed).
+  ///
+  /// Em uma transação:
+  ///  1. Lê startedAt/hourlyRate/feePercent do PRÓPRIO documento (fonte de
+  ///     verdade — não confia em estado local);
+  ///  2. Calcula duração, valor bruto, comissão e líquido;
+  ///  3. Salva tudo no pedido + finishedAt/completedAt com serverTimestamp();
+  ///  4. Cria o registro em `financial_records`.
+  ///
+  /// Retorna o registro financeiro criado (para a tela de resumo).
+  Future<FinancialRecordModel> finishServiceAndSettle(String orderId) async {
+    try {
+      return await _fb.runTransaction<FinancialRecordModel>((tx) async {
+        final ref  = _fb.ordersRef.doc(orderId);
+        final snap = await tx.get(ref);
+        if (!snap.exists || snap.data() == null) {
+          throw const ValidationException('Pedido não encontrado.');
+        }
+        final data = snap.data()!;
+        if (data['status'] != 'inProgress') {
+          throw const ValidationException(
+              'O serviço precisa estar em andamento para ser finalizado.');
+        }
+
+        final startedTs = data['startedAt'] as Timestamp?;
+        if (startedTs == null) {
+          throw const ValidationException(
+              'Início do serviço não registrado.');
+        }
+
+        // serverTimestamp não é legível dentro da transação; usamos
+        // Timestamp.now() apenas para o CÁLCULO da duração (a diferença
+        // entre dois horários do mesmo relógio é consistente) e gravamos
+        // FieldValue.serverTimestamp() como marco oficial.
+        final now      = Timestamp.now();
+        final duration = now.toDate().difference(startedTs.toDate());
+        final minutes  = duration.inMinutes < 1 ? 1 : duration.inMinutes;
+
+        final hourlyRate =
+            (data['hourlyRate'] as num?)?.toDouble() ?? 0.0;
+        final feePercent =
+            (data['platformFeePercent'] as num?)?.toDouble() ?? 15.0;
+
+        final gross = double.parse(
+            ((minutes / 60.0) * hourlyRate).toStringAsFixed(2));
+        final fee = double.parse(
+            (gross * feePercent / 100.0).toStringAsFixed(2));
+        final net = double.parse((gross - fee).toStringAsFixed(2));
+
+        tx.update(ref, {
+          'status':            'done',
+          'finishedAt':        FieldValue.serverTimestamp(),
+          'completedAt':       FieldValue.serverTimestamp(),
+          'updatedAt':         FieldValue.serverTimestamp(),
+          'durationMinutes':   minutes,
+          'grossAmount':       gross,
+          'platformFeeAmount': fee,
+          'netAmount':         net,
+          'price':             gross, // compatibilidade com telas antigas
+        });
+
+        final recordRef = _fb.financialRecordsRef.doc();
+        final record = FinancialRecordModel(
+          id:                 recordRef.id,
+          orderId:            orderId,
+          clientId:           data['userId'] ?? '',
+          clientName:         data['clientName'] ?? '',
+          workerId:           data['workerId'] ?? '',
+          workerName:         data['workerName'] ?? '',
+          category:           data['serviceCategory'] ?? '',
+          durationMinutes:    minutes,
+          hourlyRate:         hourlyRate,
+          grossAmount:        gross,
+          platformFeePercent: feePercent,
+          platformFeeAmount:  fee,
+          netAmount:          net,
+          completedAt:        now.toDate(),
+        );
+        tx.set(recordRef, {
+          ...record.toMap(),
+          'completedAt': FieldValue.serverTimestamp(),
+        });
+
+        return record;
+      });
+    } on ValidationException {
+      rethrow;
+    } on FirebaseException catch (e) {
+      throw ServerException('Erro ao finalizar o serviço: ${e.message}');
+    }
+  }
+
+  /// Registros financeiros do prestador (tela Financeiro).
+  Stream<List<FinancialRecordModel>> watchWorkerFinancialRecords(
+      String workerId) {
+    return _fb.financialRecordsRef
+        .where('workerId', isEqualTo: workerId)
+        .snapshots()
+        .map((s) {
+          final list = s.docs
+              .map((d) => FinancialRecordModel.fromMap(d.data(), d.id))
+              .toList();
+          list.sort((a, b) => b.completedAt.compareTo(a.completedAt));
+          return list;
+        });
+  }
+
+  /// Todos os registros financeiros (admin — KPIs e relatórios).
+  Stream<List<FinancialRecordModel>> watchAllFinancialRecords() {
+    return _fb.financialRecordsRef.limit(500).snapshots().map((s) {
+      final list = s.docs
+          .map((d) => FinancialRecordModel.fromMap(d.data(), d.id))
+          .toList();
+      list.sort((a, b) => b.completedAt.compareTo(a.completedAt));
+      return list;
+    });
+  }
+
+  /// Serviços ativos em tempo real (admin — operação ao vivo):
+  /// prestadores em deslocamento, no local e com cronômetro rodando.
+  Stream<List<OrderModel>> watchActiveServiceOrders() {
+    return _fb.ordersRef
+        .where('status', whereIn: ['accepted', 'arrived', 'inProgress'])
+        .snapshots()
+        .map((s) {
+          final list = s.docs
+              .map((d) => OrderModel.fromMap(d.data(), d.id))
+              .toList();
+          list.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+          return list;
+        });
   }
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -652,13 +977,19 @@ class FirestoreDatasource {
     required String workerId,
   }) async {
     try {
-      await _fb.chatsRef.doc(orderId).set({
+      final ref = _fb.chatsRef.doc(orderId);
+      // CORREÇÃO: com merge:true, reabrir o chat regravava
+      // lastMessage/lastMessageAt como null e apagava o preview da
+      // conversa na lista. Agora só cria se o documento não existir.
+      final doc = await ref.get();
+      if (doc.exists) return;
+      await ref.set({
         'orderId':       orderId,
         'participants':  [userId, workerId],
         'lastMessage':   null,
         'lastMessageAt': null,
         'createdAt':     FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+      });
     } on FirebaseException catch (e) {
       throw ServerException('Erro ao inicializar chat: ${e.message}');
     }
@@ -696,18 +1027,34 @@ class FirestoreDatasource {
     required String currentUserId,
   }) async {
     try {
+      // CORREÇÃO: combinar '==' com '!=' em campos diferentes exige índice
+      // composto no Firestore e a query falhava. Filtramos o remetente em
+      // memória (o volume de não lidas por chat é pequeno).
       final unread = await _fb.messagesRef(chatId)
           .where('isRead', isEqualTo: false)
-          .where('senderId', isNotEqualTo: currentUserId)
           .get();
-      if (unread.docs.isEmpty) return;
+      final docs = unread.docs
+          .where((d) => d.data()['senderId'] != currentUserId)
+          .toList();
+      if (docs.isEmpty) return;
       await _fb.runBatch((batch) async {
-        for (final doc in unread.docs) {
+        for (final doc in docs) {
           batch.update(doc.reference, {'isRead': true});
         }
       });
     } on FirebaseException catch (e) {
       throw ServerException('Erro ao marcar mensagens: ${e.message}');
+    }
+  }
+
+  /// Busca os dados de um chat pelo id (id do chat == id do pedido).
+  Future<Map<String, dynamic>?> getChat(String chatId) async {
+    try {
+      final doc = await _fb.chatsRef.doc(chatId).get();
+      if (!doc.exists || doc.data() == null) return null;
+      return {...doc.data()!, 'id': doc.id};
+    } on FirebaseException catch (e) {
+      throw ServerException('Erro ao buscar chat: ${e.message}');
     }
   }
 

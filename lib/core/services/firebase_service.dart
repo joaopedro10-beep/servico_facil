@@ -36,6 +36,15 @@ class FirebaseService extends GetxService {
       firestore.collection('reports');
   CollectionReference<Map<String, dynamic>> get notificationsRef =>
       firestore.collection('notifications');
+  CollectionReference<Map<String, dynamic>> get categoriesRef =>
+      firestore.collection('categories');
+  CollectionReference<Map<String, dynamic>> get financialRecordsRef =>
+      firestore.collection('financial_records');
+
+  /// Documento de configurações globais da plataforma
+  /// (ex.: platformFeePercent definido pelo administrador).
+  DocumentReference<Map<String, dynamic>> get platformSettingsRef =>
+      firestore.collection('settings').doc('platform');
   CollectionReference<Map<String, dynamic>> messagesRef(String orderId) =>
       chatsRef.doc(orderId).collection('messages');
 
