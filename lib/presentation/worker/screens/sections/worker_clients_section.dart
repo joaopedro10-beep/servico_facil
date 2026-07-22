@@ -46,11 +46,22 @@ class _WorkerClientsSectionState extends State<WorkerClientsSection>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Clientes',
-                style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 20,
-                    fontWeight: FontWeight.w700)),
+            Row(children: [
+              if (Navigator.of(context).canPop())
+                IconButton(
+                  icon: const Icon(Icons.arrow_back_rounded,
+                      color: Colors.white, size: 22),
+                  onPressed: () => Navigator.of(context).pop(),
+                  padding: EdgeInsets.zero,
+                  constraints:
+                      const BoxConstraints(minWidth: 36, minHeight: 36),
+                ),
+              const Text('Clientes',
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w700)),
+            ]),
             const SizedBox(height: 12),
             // Abas com badges reativos
             Obx(() {

@@ -42,6 +42,16 @@ class _WorkerReportsSectionState extends State<WorkerReportsSection>
         padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
+            // Botão voltar (a tela é aberta como rota pelo drawer)
+            if (Navigator.of(context).canPop())
+              IconButton(
+                icon: const Icon(Icons.arrow_back_rounded,
+                    color: Colors.white, size: 22),
+                onPressed: () => Navigator.of(context).pop(),
+                padding: EdgeInsets.zero,
+                constraints:
+                    const BoxConstraints(minWidth: 36, minHeight: 36),
+              ),
             const Expanded(
               child: Text('Relatórios',
                   style: TextStyle(color: Colors.white, fontSize: 20,
@@ -712,7 +722,7 @@ class _ServicesMonthChart extends StatelessWidget {
             getTitlesWidget: (v, _) {
               int m = now.month - (5 - v.toInt());
               if (m <= 0) m += 12;
-              return Text(DateFormat.MMM('pt').format(DateTime(2024, m)),
+              return Text(DateFormat.MMM('pt_BR').format(DateTime(2024, m)),
                   style: const TextStyle(fontSize: 9, color: WTheme.textGray));
             },
           )),
@@ -785,7 +795,7 @@ class _GrowthLineChart extends StatelessWidget {
             getTitlesWidget: (v, _) {
               int m = now.month - (5 - v.toInt());
               if (m <= 0) m += 12;
-              return Text(DateFormat.MMM('pt').format(DateTime(2024, m)),
+              return Text(DateFormat.MMM('pt_BR').format(DateTime(2024, m)),
                   style: const TextStyle(fontSize: 9, color: WTheme.textGray));
             },
           )),
@@ -950,7 +960,7 @@ class _BillingMonthChart extends StatelessWidget {
             getTitlesWidget: (v, _) {
               int m = now.month - (5 - v.toInt());
               if (m <= 0) m += 12;
-              return Text(DateFormat.MMM('pt').format(DateTime(2024, m)),
+              return Text(DateFormat.MMM('pt_BR').format(DateTime(2024, m)),
                   style: const TextStyle(fontSize: 9, color: WTheme.textGray));
             },
           )),
