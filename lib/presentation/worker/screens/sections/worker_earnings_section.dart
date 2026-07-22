@@ -371,7 +371,7 @@ class _BarChart extends StatelessWidget {
                   int m = now.month - (5 - v.toInt());
                   if (m <= 0) m += 12;
                   return Text(
-                    DateFormat.MMM('pt').format(DateTime(2024, m)),
+                    DateFormat.MMM('pt_BR').format(DateTime(2024, m)),
                     style: const TextStyle(
                         fontSize: 10, color: WTheme.textGray),
                   );
