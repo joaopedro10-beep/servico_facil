@@ -11,7 +11,17 @@ class CloudinaryService {
   static const _cloudName    = 'SEU_CLOUD_NAME';
   static const _uploadPreset = 'SEU_UPLOAD_PRESET';
 
+  static bool get _isConfigured =>
+      _cloudName != 'SEU_CLOUD_NAME' &&
+      _uploadPreset != 'SEU_UPLOAD_PRESET' &&
+      _cloudName.isNotEmpty &&
+      _uploadPreset.isNotEmpty;
+
   static Future<String> upload(File file, {required String folder}) async {
+    // Sem credenciais configuradas o upload é impossível — retorna ''
+    // e a UI avisa. Veja as instruções no topo deste arquivo.
+    if (!_isConfigured) return '';
+
     // TODO: preencher _cloudName e _uploadPreset para ativar uploads
     return '';
   }

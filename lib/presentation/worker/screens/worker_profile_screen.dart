@@ -222,14 +222,7 @@ class WorkerProfileScreen extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (w.description.isNotEmpty) ...[
-            Text(
-              w.description,
-              style: const TextStyle(
-                  fontSize: 14, color: AppColors.textSecondary, height: 1.5),
-            ),
-            const SizedBox(height: 10),
-          ],
+          // [REMOVIDO] Descrição profissional — campo descontinuado
           Row(
             children: [
               const Icon(Icons.location_on_outlined,
@@ -364,18 +357,15 @@ class WorkerProfileScreen extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       child: Row(
         children: [
-          const Icon(Icons.attach_money, color: AppColors.primary, size: 22),
+          // [REMOVIDO] Preço por hora do prestador — a cobrança agora é
+          // por hora POR CATEGORIA, definida pelo administrador.
+          const Icon(Icons.schedule_rounded,
+              color: AppColors.primary, size: 22),
           const SizedBox(width: 6),
-          const Text('Preço por hora',
-              style:
-                  TextStyle(fontSize: 14, color: AppColors.textSecondary)),
-          const Spacer(),
-          Text(
-            'R\$ ${w.pricePerHour.toStringAsFixed(2).replaceAll('.', ',')}',
-            style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
-                color: AppColors.primary),
+          const Expanded(
+            child: Text('Cobrança por hora conforme a categoria do serviço',
+                style: TextStyle(
+                    fontSize: 13, color: AppColors.textSecondary)),
           ),
         ],
       ),

@@ -42,8 +42,10 @@ class EditWorkerProfileScreen extends StatelessWidget {
             _SectionTitle(title: 'Foto de perfil'),
             const SizedBox(height: 12),
             _buildProfilePhotoEditor(ctrl),
+            const SizedBox(height: 6),
+            _buildChangePhotoButton(ctrl),
 
-            const SizedBox(height: 24),
+            const SizedBox(height: 18),
 
             // ── Disponibilidade ────────────────────────────────────────────
             _SectionTitle(title: 'Disponibilidade'),
@@ -52,20 +54,36 @@ class EditWorkerProfileScreen extends StatelessWidget {
 
             const SizedBox(height: 24),
 
-            // ── Descrição ──────────────────────────────────────────────────
-            _SectionTitle(title: 'Descrição profissional'),
+            // ── Dados pessoais ─────────────────────────────────────────────
+            // [REMOVIDOS] "Descrição profissional" e "Preço por hora":
+            // a cobrança agora é por hora definida pelo ADMIN na coleção
+            // `categories` — o prestador não precifica o próprio serviço.
+            _SectionTitle(title: 'Dados pessoais'),
             const SizedBox(height: 8),
             TextFormField(
-              controller: ctrl.descriptionCtrl,
-              maxLines: 4,
-              maxLength: 400,
+              controller: ctrl.nameCtrl,
+              textCapitalization: TextCapitalization.words,
               decoration: const InputDecoration(
-                hintText: 'Fale sobre sua experiência e diferenciais...',
+                labelText: 'Nome completo',
+                prefixIcon: Icon(Icons.person_outline_rounded),
               ),
-              validator: (v) =>
-                  (v == null || v.trim().length < 20)
-                      ? 'Mínimo de 20 caracteres'
-                      : null,
+              validator: (v) => (v == null || v.trim().length < 3)
+                  ? 'Informe seu nome'
+                  : null,
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: ctrl.phoneCtrl,
+              keyboardType: TextInputType.phone,
+              decoration: const InputDecoration(
+                labelText: 'Telefone',
+                hintText: '(00) 00000-0000',
+                prefixIcon: Icon(Icons.phone_outlined),
+              ),
+              validator: (v) => (v == null ||
+                      v.replaceAll(RegExp(r'[^0-9]'), '').length < 10)
+                  ? 'Telefone inválido'
+                  : null,
             ),
 
             const SizedBox(height: 24),
@@ -77,43 +95,78 @@ class EditWorkerProfileScreen extends StatelessWidget {
 
             const SizedBox(height: 24),
 
-            // ── Preço ──────────────────────────────────────────────────────
-            _SectionTitle(title: 'Preço por hora (R\$)'),
+            // ── Endereço ───────────────────────────────────────────────────
+            _SectionTitle(title: 'Endereço'),
             const SizedBox(height: 8),
             TextFormField(
-              controller: ctrl.priceCtrl,
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
+              controller: ctrl.cepCtrl,
+              keyboardType: TextInputType.number,
               decoration: const InputDecoration(
-                prefixText: 'R\$ ',
-                hintText: '0,00',
+                labelText: 'CEP',
+                hintText: '00000-000',
+                prefixIcon: Icon(Icons.markunread_mailbox_outlined),
               ),
-              validator: (v) {
-                if (v == null || v.isEmpty) return 'Informe o preço';
-                final val =
-                    double.tryParse(v.replaceAll(',', '.'));
-                if (val == null || val <= 0) return 'Preço inválido';
-                return null;
-              },
             ),
-
-            const SizedBox(height: 24),
-
-            // ── Bairro ─────────────────────────────────────────────────────
-            _SectionTitle(title: 'Bairro de atuação'),
-            const SizedBox(height: 8),
+            const SizedBox(height: 12),
+            Row(children: [
+              Expanded(
+                flex: 3,
+                child: TextFormField(
+                  controller: ctrl.streetCtrl,
+                  textCapitalization: TextCapitalization.words,
+                  decoration: const InputDecoration(
+                    labelText: 'Rua',
+                    prefixIcon: Icon(Icons.signpost_outlined),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: TextFormField(
+                  controller: ctrl.numberCtrl,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'Nº'),
+                ),
+              ),
+            ]),
+            const SizedBox(height: 12),
             TextFormField(
               controller: ctrl.neighborhoodCtrl,
               textCapitalization: TextCapitalization.words,
               decoration: const InputDecoration(
-                hintText: 'Ex: Centro, Vila Nova...',
+                labelText: 'Bairro',
                 prefixIcon: Icon(Icons.location_on_outlined),
               ),
-              validator: (v) =>
-                  (v == null || v.trim().isEmpty)
-                      ? 'Informe o bairro'
-                      : null,
+              validator: (v) => (v == null || v.trim().isEmpty)
+                  ? 'Informe o bairro'
+                  : null,
             ),
+            const SizedBox(height: 12),
+            Row(children: [
+              Expanded(
+                flex: 3,
+                child: TextFormField(
+                  controller: ctrl.cityCtrl,
+                  textCapitalization: TextCapitalization.words,
+                  decoration: const InputDecoration(
+                    labelText: 'Cidade',
+                    prefixIcon: Icon(Icons.location_city_outlined),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: TextFormField(
+                  controller: ctrl.stateCtrl,
+                  maxLength: 2,
+                  textCapitalization: TextCapitalization.characters,
+                  decoration: const InputDecoration(
+                      labelText: 'UF', counterText: ''),
+                ),
+              ),
+            ]),
+
+            const SizedBox(height: 24),
 
             const SizedBox(height: 24),
 
@@ -183,6 +236,27 @@ class EditWorkerProfileScreen extends StatelessWidget {
           ],
         );
       }),
+    );
+  }
+
+  // Botão explícito "Alterar Foto" (galeria → crop/compressão →
+  // Cloudinary → Firestore → interface atualiza na hora via Rx)
+  Widget _buildChangePhotoButton(WorkerProfileController ctrl) {
+    return Center(
+      child: Obx(() => TextButton.icon(
+            onPressed: ctrl.isUploadingPhoto.value
+                ? null
+                : ctrl.pickProfilePhoto,
+            icon: ctrl.isUploadingPhoto.value
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2))
+                : const Icon(Icons.photo_camera_outlined, size: 18),
+            label: Text(ctrl.isUploadingPhoto.value
+                ? 'Enviando...'
+                : 'Alterar Foto'),
+          )),
     );
   }
 

@@ -40,15 +40,22 @@ class WorkerProfileController extends GetxController {
 
   // Edit profile
   final isAvailable = true.obs;
+  final isUploadingPhoto = false.obs;
   final selectedCategories = <String>[].obs;
   final newPortfolioFiles = <File>[].obs;
   final removedPortfolioUrls = <String>[].obs;
 
-  // Form
+  // Form — [REMOVIDOS] descrição profissional e preço/hora: a cobrança
+  // agora é por hora via categorias (admin), não por prestador.
   final formKey = GlobalKey<FormState>();
-  final descriptionCtrl = TextEditingController();
-  final priceCtrl = TextEditingController();
+  final nameCtrl = TextEditingController();
+  final phoneCtrl = TextEditingController();
+  final streetCtrl = TextEditingController();
+  final numberCtrl = TextEditingController();
   final neighborhoodCtrl = TextEditingController();
+  final cepCtrl = TextEditingController();
+  final cityCtrl = TextEditingController();
+  final stateCtrl = TextEditingController();
 
   // ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -66,9 +73,14 @@ class WorkerProfileController extends GetxController {
 
   @override
   void onClose() {
-    descriptionCtrl.dispose();
-    priceCtrl.dispose();
+    nameCtrl.dispose();
+    phoneCtrl.dispose();
+    streetCtrl.dispose();
+    numberCtrl.dispose();
     neighborhoodCtrl.dispose();
+    cepCtrl.dispose();
+    cityCtrl.dispose();
+    stateCtrl.dispose();
     super.onClose();
   }
 
@@ -102,9 +114,14 @@ class WorkerProfileController extends GetxController {
   void prepareEdit() {
     final w = worker.value;
     if (w == null) return;
-    descriptionCtrl.text = w.description;
-    priceCtrl.text = w.pricePerHour.toStringAsFixed(2);
+    nameCtrl.text = w.name;
+    phoneCtrl.text = w.phone;
+    streetCtrl.text = w.address.street;
+    numberCtrl.text = w.address.number;
     neighborhoodCtrl.text = w.address.neighborhood;
+    cepCtrl.text = w.address.cep;
+    cityCtrl.text = w.address.city;
+    stateCtrl.text = w.address.state;
     isAvailable.value = w.isAvailable;
     selectedCategories.assignAll(w.categories);
     newPortfolioFiles.clear();
@@ -121,7 +138,7 @@ class WorkerProfileController extends GetxController {
     );
     if (xFile == null) return;
 
-    isSaving.value = true;
+    isUploadingPhoto.value = true;
     try {
       final url = await CloudinaryService.upload(
         File(xFile.path),
@@ -141,7 +158,7 @@ class WorkerProfileController extends GetxController {
       Get.snackbar('Erro', 'Não foi possível salvar a foto.',
           backgroundColor: Colors.red, colorText: Colors.white);
     } finally {
-      isSaving.value = false;
+      isUploadingPhoto.value = false;
     }
   }
 
@@ -191,6 +208,11 @@ class WorkerProfileController extends GetxController {
   // ── Salvar perfil ─────────────────────────────────────────────────────────
 
   Future<void> saveProfile() async {
+    // CORREÇÃO do "não salva": o código antigo fazia
+    // double.parse(priceCtrl.text) — com o campo vazio/invalidado isso
+    // lançava FormatException antes do updateWorker e caía no catch
+    // genérico. Preço/hora e descrição foram REMOVIDOS do perfil
+    // (a cobrança agora vem das categorias, definidas pelo admin).
     if (!formKey.currentState!.validate()) return;
     if (selectedCategories.isEmpty) {
       Get.snackbar('Atenção', 'Selecione ao menos uma categoria.',
@@ -217,12 +239,17 @@ class WorkerProfileController extends GetxController {
       ];
 
       final newAddress = w.address.copyWith(
+        street: streetCtrl.text.trim(),
+        number: numberCtrl.text.trim(),
         neighborhood: neighborhoodCtrl.text.trim(),
+        cep: cepCtrl.text.trim(),
+        city: cityCtrl.text.trim(),
+        state: stateCtrl.text.trim().toUpperCase(),
       );
 
       final updates = <String, dynamic>{
-        'description': descriptionCtrl.text.trim(),
-        'pricePerHour': double.parse(priceCtrl.text.replaceAll(',', '.')),
+        'name': nameCtrl.text.trim(),
+        'phone': phoneCtrl.text.trim(),
         'address': newAddress.toMap(),
         'isAvailable': isAvailable.value,
         'categories': selectedCategories.toList(),
@@ -232,8 +259,8 @@ class WorkerProfileController extends GetxController {
       await _ds.updateWorker(w.id, updates);
 
       worker.value = w.copyWith(
-        description: updates['description'] as String,
-        pricePerHour: updates['pricePerHour'] as double,
+        name: updates['name'] as String,
+        phone: updates['phone'] as String,
         address: newAddress,
         isAvailable: updates['isAvailable'] as bool,
         categories: List<String>.from(updates['categories'] as List),
