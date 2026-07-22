@@ -38,6 +38,7 @@ import 'presentation/client/controllers/client_profile_controller.dart';
 import 'presentation/worker/screens/worker_home_screen.dart';
 import 'presentation/worker/screens/worker_request_detail_screen.dart';
 import 'presentation/worker/screens/worker_navigation_screen.dart';
+import 'presentation/worker/controllers/worker_navigation_controller.dart';
 import 'presentation/worker/screens/worker_profile_screen.dart';
 import 'presentation/worker/screens/edit_worker_profile_screen.dart';
 import 'presentation/worker/screens/earnings_screen.dart';
@@ -401,6 +402,11 @@ class ServicoFacilApp extends StatelessWidget {
     GetPage(
       name: AppRoutes.workerNavigation,
       page: () => const WorkerNavigationScreen(),
+      binding: BindingsBuilder(() {
+        // fenix: recria o controller a cada entrada na rota (após o
+        // descarte automático no pop) — nunca Get.put dentro do build
+        Get.lazyPut(() => WorkerNavigationController(), fenix: true);
+      }),
       transition: Transition.fadeIn,
     ),
 

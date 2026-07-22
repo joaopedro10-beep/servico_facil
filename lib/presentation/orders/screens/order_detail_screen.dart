@@ -3,27 +3,41 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 
+import 'dart:math' as math;
+
 import '../../../core/constants/app_colors.dart';
+import '../../../core/services/geocoding_service.dart';
 import '../../../core/constants/app_routes.dart';
 import '../../../core/services/firebase_service.dart';
 import '../../../data/models/order_model.dart';
+import '../../worker/widgets/service_route_map.dart';
 import '../controllers/order_controller.dart';
 
-class OrderDetailScreen extends StatelessWidget {
+class OrderDetailScreen extends StatefulWidget {
   const OrderDetailScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    // CORREÇÃO: esta tela era aberta com argumentos em formatos diferentes
-    // (Map{'order'}, Map{'orderId'}, OrderModel puro, String) e quebrava
-    // com cast inválido — ex.: ao tocar em uma notificação. Agora todos os
-    // formatos são aceitos; quando só há o id, o pedido é carregado via
-    // stream e a tela mostra um loading até chegar.
-    final args = Get.arguments;
-    OrderModel? initialOrder;
-    String? orderId;
-    bool? isWorkerArg;
+  State<OrderDetailScreen> createState() => _OrderDetailScreenState();
+}
 
+class _OrderDetailScreenState extends State<OrderDetailScreen> {
+  // CORREÇÃO DEFINITIVA (GetX): parsing de argumentos e watchOrder saíram
+  // do build. Antes, cada rebuild cancelava e recriava o stream do pedido;
+  // como o Firestore reemite o snapshot imediatamente no listen, isso
+  // realimentava o Obx e gerava o loop/erro de GetX ao abrir os Detalhes
+  // pela notificação. Efeitos colaterais agora rodam UMA vez, no initState.
+  OrderModel? initialOrder;
+  String resolvedOrderId = '';
+  bool? isWorkerArg;
+  late final OrderController ctrl;
+
+  @override
+  void initState() {
+    super.initState();
+    ctrl = Get.find<OrderController>();
+
+    final args = Get.arguments;
+    String? orderId;
     if (args is OrderModel) {
       initialOrder = args;
     } else if (args is String) {
@@ -34,14 +48,15 @@ class OrderDetailScreen extends StatelessWidget {
       orderId = map['orderId'] as String? ?? initialOrder?.id;
       isWorkerArg = map['isWorker'] as bool?;
     }
-    orderId ??= initialOrder?.id;
-    final resolvedOrderId = orderId ?? '';
+    resolvedOrderId = orderId ?? initialOrder?.id ?? '';
 
-    final ctrl = Get.find<OrderController>();
     if (resolvedOrderId.isNotEmpty) {
       ctrl.watchOrder(resolvedOrderId);
     }
+  }
 
+  @override
+  Widget build(BuildContext context) {
     final uid = Get.find<FirebaseService>().currentUser?.uid ?? '';
 
     return Scaffold(
@@ -83,6 +98,12 @@ class OrderDetailScreen extends StatelessWidget {
         return ListView(
           padding: const EdgeInsets.all(16),
           children: [
+            // ── Rastreamento ao vivo (cliente acompanha o prestador) ────
+            if (!isWorker && order.isOngoing) ...[
+              _LiveTrackingCard(order: order),
+              const SizedBox(height: 20),
+            ],
+
             // ── Timeline ────────────────────────────────────────────────
             _buildTimeline(order),
             const SizedBox(height: 20),
@@ -701,5 +722,170 @@ class _InfoRow extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Rastreamento ao vivo (estilo apps de transporte)
+// O prestador publica workerLat/workerLng/workerSpeedKmh no pedido durante
+// o deslocamento; este card acompanha via o MESMO stream do pedido —
+// tudo em tempo real, sem refresh manual.
+// ═══════════════════════════════════════════════════════════════════════════
+class _LiveTrackingCard extends StatefulWidget {
+  final OrderModel order;
+  const _LiveTrackingCard({required this.order});
+
+  @override
+  State<_LiveTrackingCard> createState() => _LiveTrackingCardState();
+}
+
+class _LiveTrackingCardState extends State<_LiveTrackingCard> {
+  OrderModel get order => widget.order;
+  double? _destLat;
+  double? _destLng;
+
+  @override
+  void initState() {
+    super.initState();
+    _resolveDest();
+  }
+
+  Future<void> _resolveDest() async {
+    if (order.address.lat != 0 || order.address.lng != 0) {
+      _destLat = order.address.lat;
+      _destLng = order.address.lng;
+      if (mounted) setState(() {});
+      return;
+    }
+    // Endereço sem coordenadas → geocodifica (mesma correção do mapa
+    // do prestador)
+    final r = await GeocodingService.geocode(order.address.fullAddress);
+    if (r != null && mounted) {
+      setState(() {
+        _destLat = r.$1;
+        _destLng = r.$2;
+      });
+    }
+  }
+
+  double _haversineKm(
+      double lat1, double lng1, double lat2, double lng2) {
+    const r = 6371.0;
+    double rad(double d) => d * math.pi / 180;
+    final dLat = rad(lat2 - lat1);
+    final dLng = rad(lng2 - lng1);
+    final a = math.sin(dLat / 2) * math.sin(dLat / 2) +
+        math.cos(rad(lat1)) *
+            math.cos(rad(lat2)) *
+            math.sin(dLng / 2) *
+            math.sin(dLng / 2);
+    return r * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
+  }
+
+  String get _statusLabel {
+    switch (order.status) {
+      case OrderStatus.accepted:   return 'A caminho';
+      case OrderStatus.arrived:    return 'Chegou ao local';
+      case OrderStatus.inProgress: return 'Em atendimento';
+      case OrderStatus.done:       return 'Finalizado';
+      default:                     return 'Aguardando';
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final hasWorkerPos =
+        order.workerLat != null && order.workerLng != null;
+    final hasDest = _destLat != null && _destLng != null;
+
+    double? km;
+    int? etaMin;
+    if (hasWorkerPos && hasDest) {
+      km = _haversineKm(
+          order.workerLat!, order.workerLng!, _destLat!, _destLng!);
+      etaMin = math.max(1, (km / 30.0 * 60).round());
+    }
+    final speed = order.workerSpeedKmh ?? 0;
+
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: Column(children: [
+        SizedBox(
+          height: 220,
+          child: !hasDest
+              ? const Center(
+                  child: CircularProgressIndicator.adaptive())
+              : ServiceRouteMap(
+                  workerLat: order.workerLat ?? 0,
+                  workerLng: order.workerLng ?? 0,
+                  clientLat: _destLat!,
+                  clientLng: _destLng!,
+                  hasWorkerPosition: hasWorkerPos,
+                ),
+        ),
+        Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(children: [
+            Expanded(
+              child: _TrackStat(
+                  icon: Icons.route_rounded,
+                  label: 'Distância',
+                  value: km != null
+                      ? '${km.toStringAsFixed(1)} km'
+                      : '—'),
+            ),
+            Expanded(
+              child: _TrackStat(
+                  icon: Icons.schedule_rounded,
+                  label: 'Chegada',
+                  value: etaMin != null ? '~$etaMin min' : '—'),
+            ),
+            Expanded(
+              child: _TrackStat(
+                  icon: Icons.speed_rounded,
+                  label: 'Velocidade',
+                  value: speed > 1
+                      ? '${speed.toStringAsFixed(0)} km/h'
+                      : '—'),
+            ),
+            Expanded(
+              child: _TrackStat(
+                  icon: Icons.local_shipping_rounded,
+                  label: 'Status',
+                  value: _statusLabel),
+            ),
+          ]),
+        ),
+      ]),
+    );
+  }
+}
+
+class _TrackStat extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  const _TrackStat({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(children: [
+      Icon(icon, size: 16, color: AppColors.textSecondary),
+      const SizedBox(height: 3),
+      FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Text(value,
+            style: const TextStyle(
+                fontSize: 12, fontWeight: FontWeight.w800)),
+      ),
+      Text(label,
+          style: const TextStyle(
+              fontSize: 9.5, color: AppColors.textHint)),
+    ]);
   }
 }
