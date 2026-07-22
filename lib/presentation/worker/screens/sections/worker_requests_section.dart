@@ -55,7 +55,7 @@ class _WorkerRequestsSectionState extends State<WorkerRequestsSection>
                       children: [
                         const Text('Novas',
                             overflow: TextOverflow.ellipsis),
-                        if (widget.ctrl.newOrders.isNotEmpty) ...[
+                        if (widget.ctrl.incomingOrders.isNotEmpty) ...[
                           const SizedBox(width: 6),
                           Container(
                             padding: const EdgeInsets.symmetric(
@@ -65,7 +65,7 @@ class _WorkerRequestsSectionState extends State<WorkerRequestsSection>
                               borderRadius: BorderRadius.circular(10),
                             ),
                             child: Text(
-                              '${widget.ctrl.newOrders.length}',
+                              '${widget.ctrl.incomingOrders.length}',
                               style: const TextStyle(
                                   color: Colors.white,
                                   fontSize: 10,
@@ -86,7 +86,14 @@ class _WorkerRequestsSectionState extends State<WorkerRequestsSection>
       // Conteúdo
       Expanded(
         child: Obx(() {
-          final novo = widget.ctrl.newOrders;
+          // Toca os observáveis para o Obx reagir a ambos os streams
+          widget.ctrl.allOrders.length;
+          widget.ctrl.availableOrders.length;
+
+          // CORREÇÃO: "Novas" agora inclui pedidos disponíveis da
+          // plataforma (workerId == '') — antes só mostrava pedidos já
+          // vinculados, e as solicitações dos clientes nunca apareciam.
+          final novo = widget.ctrl.incomingOrders;
           final aceitas = widget.ctrl.acceptedOrders +
               widget.ctrl.inProgressOrders +
               widget.ctrl.doneOrders;
@@ -177,6 +184,7 @@ class _RequestCard extends StatelessWidget {
     switch (order.status) {
       case OrderStatus.pending:    return WTheme.amber;
       case OrderStatus.accepted:   return WTheme.blue;
+      case OrderStatus.arrived:    return WTheme.blue;
       case OrderStatus.inProgress: return WTheme.purple;
       case OrderStatus.done:       return WTheme.green;
       case OrderStatus.cancelled:  return WTheme.red;
@@ -187,6 +195,7 @@ class _RequestCard extends StatelessWidget {
     switch (order.status) {
       case OrderStatus.pending:    return 'Pendente';
       case OrderStatus.accepted:   return 'Aceito';
+      case OrderStatus.arrived:    return 'No local';
       case OrderStatus.inProgress: return 'Em andamento';
       case OrderStatus.done:       return 'Concluído';
       case OrderStatus.cancelled:  return 'Recusado';
@@ -195,7 +204,30 @@ class _RequestCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    // Pendente → abre a tela de solicitação (apenas Aceitar/Recusar).
+    // Em atendimento → retoma a tela de navegação estilo 99.
+    final isPendingRequest = order.status == OrderStatus.pending;
+    final isOngoing = order.status == OrderStatus.accepted ||
+        order.status == OrderStatus.arrived ||
+        order.status == OrderStatus.inProgress;
+
+    void open() {
+      if (isPendingRequest) {
+        Get.toNamed(AppRoutes.workerRequestDetail,
+            arguments: {'order': order});
+      } else if (isOngoing) {
+        Get.toNamed(AppRoutes.workerNavigation,
+            arguments: {'orderId': order.id});
+      } else {
+        Get.toNamed(AppRoutes.orderDetail,
+            arguments: {'order': order, 'isWorker': true});
+      }
+    }
+
+    return InkWell(
+      onTap: open,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
@@ -297,63 +329,52 @@ class _RequestCard extends StatelessWidget {
                     fontSize: 12, color: WTheme.textGray),
                 maxLines: 2, overflow: TextOverflow.ellipsis),
           ],
-          if (showActions) ...[
+          if (showActions && isPendingRequest) ...[
             const SizedBox(height: 12),
-            Row(children: [
-              Expanded(
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: WTheme.blue,
-                    minimumSize: const Size(0, 40),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10)),
-                    padding: const EdgeInsets.symmetric(horizontal: 6),
-                  ),
-                  onPressed: () => ctrl.acceptOrder(order),
-                  child: const Text('Aceitar',
-                      style: TextStyle(
-                          fontSize: 12, color: Colors.white),
-                      overflow: TextOverflow.ellipsis),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: WTheme.blue,
+                  minimumSize: const Size(0, 44),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
                 ),
+                onPressed: open,
+                icon: const Icon(Icons.open_in_new_rounded,
+                    color: Colors.white, size: 18),
+                label: const Text('Ver solicitação',
+                    style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700)),
               ),
-              const SizedBox(width: 6),
-              Expanded(
-                child: OutlinedButton(
-                  style: OutlinedButton.styleFrom(
-                    minimumSize: const Size(0, 40),
-                    side: const BorderSide(color: WTheme.border),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10)),
-                    padding: const EdgeInsets.symmetric(horizontal: 6),
-                  ),
-                  onPressed: () => Get.toNamed(AppRoutes.orderDetail,
-                      arguments: order),
-                  child: const Text('Detalhes',
-                      style: TextStyle(
-                          fontSize: 12, color: WTheme.textGray),
-                      overflow: TextOverflow.ellipsis),
+            ),
+          ],
+          if (isOngoing) ...[
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF8B5CF6),
+                  minimumSize: const Size(0, 44),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
                 ),
+                onPressed: open,
+                icon: const Icon(Icons.navigation_rounded,
+                    color: Colors.white, size: 18),
+                label: const Text('Continuar atendimento',
+                    style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700)),
               ),
-              const SizedBox(width: 6),
-              Expanded(
-                child: OutlinedButton(
-                  style: OutlinedButton.styleFrom(
-                    minimumSize: const Size(0, 40),
-                    foregroundColor: WTheme.red,
-                    side: const BorderSide(color: WTheme.red),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10)),
-                    padding: const EdgeInsets.symmetric(horizontal: 6),
-                  ),
-                  onPressed: () => ctrl.refuseOrder(order),
-                  child: const Text('Recusar',
-                      style: TextStyle(fontSize: 12),
-                      overflow: TextOverflow.ellipsis),
-                ),
-              ),
-            ]),
+            ),
           ],
         ]),
+      ),
       ),
     );
   }

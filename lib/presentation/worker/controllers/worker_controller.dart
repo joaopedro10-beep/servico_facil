@@ -8,7 +8,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../core/constants/app_routes.dart';
 import '../../../core/errors/app_exceptions.dart';
 import '../../../core/services/firebase_service.dart';
+import '../../../core/services/notification_service.dart';
 import '../../../data/datasources/firestore_datasource.dart';
+import '../../../data/models/financial_record_model.dart';
 import '../../../data/models/order_model.dart';
 import '../../../data/models/review_model.dart';
 import '../../../data/models/worker_model.dart';
@@ -40,10 +42,43 @@ class WorkerController extends GetxController {
   StreamSubscription? _availableOrdersSub;
   int _lastActiveCount = 0; // controle para evitar cascade de resubscriptions
   StreamSubscription? _reviewsSub;
+  StreamSubscription? _financialSub;
+
+  // ─── Registros financeiros (coleção financial_records) ────────────────────
+  // Alimentados automaticamente ao finalizar cada serviço no fluxo 99.
+  final financialRecords = <FinancialRecordModel>[].obs;
+
+  // Pedidos disponíveis dispensados localmente pelo prestador (aba "Novas")
+  final _dismissedOrderIds = <String>{}.obs;
+
+  // Controle do alerta de nova solicitação:
+  // guarda os ids já conhecidos para notificar apenas pedidos que CHEGARAM
+  // enquanto o app está aberto (evita spam no primeiro snapshot).
+  final Set<String> _knownAvailableIds = {};
+  bool _availableStreamPrimed = false;
 
   // ─── Computed: listas de pedidos por status ───────────────────────────────
   List<OrderModel> get newOrders =>
       allOrders.where((o) => o.status == OrderStatus.pending).toList();
+
+  /// Solicitações que o prestador deve ver na aba "Novas":
+  /// pedidos pendentes já vinculados a ele (workerId == uid) +
+  /// pedidos disponíveis na plataforma (workerId == '') da sua categoria.
+  ///
+  /// CORREÇÃO: antes a UI exibia apenas [newOrders], mas pedidos criados
+  /// pelo cliente nascem com workerId == '' — por isso o prestador nunca
+  /// via as solicitações. Agora as duas fontes são combinadas (sem
+  /// duplicatas e sem os pedidos dispensados localmente).
+  List<OrderModel> get incomingOrders {
+    final seen = <String>{};
+    final list = <OrderModel>[];
+    for (final o in [...newOrders, ...availableOrders]) {
+      if (_dismissedOrderIds.contains(o.id)) continue;
+      if (seen.add(o.id)) list.add(o);
+    }
+    list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    return list;
+  }
 
   List<OrderModel> get acceptedOrders =>
       allOrders.where((o) => o.status == OrderStatus.accepted).toList();
@@ -184,7 +219,10 @@ class WorkerController extends GetxController {
   @override
   void onInit() {
     super.onInit();
-    _loadWorker().then((_) => _startAvailableOrdersStream());
+    _loadWorker().then((_) {
+      _startAvailableOrdersStream();
+      _startFinancialStream();
+    });
     _startOrdersStream();
     _startReviewsStream();
     // Reinicia stream quando worker muda (aprovação, suspensão, categorias)
@@ -200,8 +238,39 @@ class WorkerController extends GetxController {
     _ordersSub?.cancel();
     _availableOrdersSub?.cancel();
     _reviewsSub?.cancel();
+    _financialSub?.cancel();
     super.onClose();
   }
+
+  // ─── Financeiro (registros de serviços concluídos) ────────────────────────
+
+  void _startFinancialStream() {
+    final w = worker.value;
+    if (w == null) return;
+    _financialSub?.cancel();
+    _financialSub =
+        _ds.watchWorkerFinancialRecords(w.id).listen((list) {
+      financialRecords.assignAll(list);
+    }, onError: (_) {});
+  }
+
+  double get financialPendingTotal => financialRecords
+      .where((r) => r.paymentStatus == PaymentStatus.pending)
+      .fold(0.0, (s, r) => s + r.netAmount);
+
+  double get financialPaidTotal => financialRecords
+      .where((r) => r.paymentStatus == PaymentStatus.paid)
+      .fold(0.0, (s, r) => s + r.netAmount);
+
+  double get financialWithdrawnTotal => financialRecords
+      .where((r) => r.paymentStatus == PaymentStatus.withdrawn)
+      .fold(0.0, (s, r) => s + r.netAmount);
+
+  double get financialGrossTotal =>
+      financialRecords.fold(0.0, (s, r) => s + r.grossAmount);
+
+  double get financialNetTotal =>
+      financialRecords.fold(0.0, (s, r) => s + r.netAmount);
 
   // ─── Carregamento ─────────────────────────────────────────────────────────
   Future<void> reload() => _loadWorker();
@@ -258,7 +327,10 @@ class WorkerController extends GetxController {
   /// 5. Ambas as telas atualizam via streams Firestore (sem navegação manual)
   final isAccepting = false.obs;
 
-  Future<void> acceptOrder(OrderModel order) async {
+  /// Aceita o pedido. Retorna true em caso de sucesso — os chamadores
+  /// (ex.: tela de solicitação) só devem navegar para o mapa se true.
+  Future<bool> acceptOrder(OrderModel order,
+      {bool openNavigation = true}) async {
     // Guarda local
     if (hasActiveJob) {
       Get.snackbar(
@@ -269,7 +341,7 @@ class WorkerController extends GetxController {
         colorText: Colors.white,
         duration: const Duration(seconds: 3),
       );
-      return;
+      return false;
     }
 
     isAccepting.value = true;
@@ -300,14 +372,21 @@ class WorkerController extends GetxController {
       // Reinicia stream explicitamente (hasActiveJob agora = true)
       _startAvailableOrdersStream();
 
-      Get.snackbar(
-        'Pedido aceito!',
-        'Você aceitou o pedido de ${order.serviceCategory}.',
-        snackPosition: SnackPosition.TOP,
-        backgroundColor: const Color(0xFF1D9E75),
-        colorText: Colors.white,
-        duration: const Duration(seconds: 3),
-      );
+      if (openNavigation) {
+        // Fluxo estilo 99: abre imediatamente a tela de navegação
+        Get.toNamed(AppRoutes.workerNavigation,
+            arguments: {'orderId': order.id});
+      } else {
+        Get.snackbar(
+          'Pedido aceito!',
+          'Você aceitou o pedido de ${order.serviceCategory}.',
+          snackPosition: SnackPosition.TOP,
+          backgroundColor: const Color(0xFF1D9E75),
+          colorText: Colors.white,
+          duration: const Duration(seconds: 3),
+        );
+      }
+      return true;
     } on ValidationException catch (e) {
       // Pedido já foi aceito por outro prestador
       Get.snackbar(
@@ -318,19 +397,40 @@ class WorkerController extends GetxController {
         colorText: Colors.white,
         duration: const Duration(seconds: 4),
       );
+      return false;
     } catch (e) {
+      // permission-denied aqui normalmente indica regras antigas ou
+      // prestador não elegível (isVerified/isAvailable/isSuspended).
+      final msg = e.toString().contains('permission-denied')
+          ? 'Permissão negada. Verifique se seu perfil está aprovado e '
+              'disponível, e se as regras do Firestore estão atualizadas.'
+          : 'Não foi possível aceitar o pedido. Tente novamente.';
       Get.snackbar(
         'Erro',
-        'Não foi possível aceitar o pedido. Tente novamente.',
+        msg,
         snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: const Color(0xFFD32F2F),
+        colorText: Colors.white,
+        duration: const Duration(seconds: 5),
       );
+      return false;
     } finally {
       isAccepting.value = false;
     }
   }
 
   Future<void> refuseOrder(OrderModel order) async {
-    // Pedido volta para pendente — outros prestadores podem aceitar
+    // Pedido ainda não vinculado (workerId == ''): apenas dispensa
+    // localmente — ele continua disponível para outros prestadores e o
+    // cliente NÃO deve receber "pedido recusado" (outro profissional
+    // ainda pode aceitar).
+    if (order.workerId == null || order.workerId!.isEmpty) {
+      _dismissedOrderIds.add(order.id);
+      availableOrders.refresh();
+      return;
+    }
+
+    // Pedido já vinculado a este prestador: volta para a fila e avisa o cliente.
     await _ds.refuseOrder(order.id);
     await _ds.saveNotification(
       targetUserId: order.userId,
@@ -345,8 +445,8 @@ class WorkerController extends GetxController {
     await _ds.updateOrderStatusWithTimestamp(order.id, OrderStatus.inProgress);
     await _ds.saveNotification(
       targetUserId: order.userId,
-      title: 'Servico iniciado!',
-      body: 'O profissional chegou e iniciou o servico de ' + order.serviceCategory + '.',
+      title: 'Serviço iniciado!',
+      body: 'O profissional chegou e iniciou o serviço de ' + order.serviceCategory + '.',
       type: 'order_started',
       targetId: order.id,
     );
@@ -378,6 +478,7 @@ class WorkerController extends GetxController {
     if (w == null) return;
 
     _availableOrdersSub?.cancel();
+    _availableStreamPrimed = false; // primeiro snapshot não gera alerta
 
     // Categorias ativas: usa activeCategories se preenchido, senão categories do perfil
     final activeCats = w.activeCategories.isNotEmpty
@@ -395,8 +496,66 @@ class WorkerController extends GetxController {
     ).listen(
       (list) {
         availableOrders.assignAll(list);
+        _alertNewAvailableOrders(list);
       },
       onError: (_) => availableOrders.clear(),
+    );
+  }
+
+  /// Dispara um alerta (notificação local + snackbar) quando uma nova
+  /// solicitação chega em tempo real enquanto o prestador está logado.
+  void _alertNewAvailableOrders(List<OrderModel> list) {
+    if (!_availableStreamPrimed) {
+      // Primeiro snapshot após login/reinício de stream: só memoriza.
+      _knownAvailableIds
+        ..clear()
+        ..addAll(list.map((o) => o.id));
+      _availableStreamPrimed = true;
+      return;
+    }
+
+    final fresh =
+        list.where((o) => !_knownAvailableIds.contains(o.id)).toList();
+    _knownAvailableIds.addAll(list.map((o) => o.id));
+    if (fresh.isEmpty) return;
+
+    final first = fresh.first;
+    final title = fresh.length == 1
+        ? 'Nova solicitação de serviço!'
+        : '${fresh.length} novas solicitações!';
+    final body = fresh.length == 1
+        ? '${first.clientName ?? 'Um cliente'} solicitou ${first.serviceCategory}.'
+        : 'Você tem novas solicitações aguardando resposta.';
+
+    // Notificação no sistema (aparece mesmo com o app em segundo plano)
+    if (Get.isRegistered<NotificationService>()) {
+      Get.find<NotificationService>().showLocal(
+        title: title,
+        body: body,
+        type: 'new_order',
+        targetId: first.id,
+      );
+    }
+
+    // Alerta visual dentro do app — tocar abre a tela da solicitação
+    Get.snackbar(
+      title,
+      body,
+      snackPosition: SnackPosition.TOP,
+      backgroundColor: const Color(0xFF1D9E75),
+      colorText: Colors.white,
+      duration: const Duration(seconds: 5),
+      icon: const Icon(Icons.notifications_active_rounded,
+          color: Colors.white),
+      onTap: (_) => Get.toNamed(AppRoutes.workerRequestDetail,
+          arguments: {'order': first}),
+      mainButton: TextButton(
+        onPressed: () => Get.toNamed(AppRoutes.workerRequestDetail,
+            arguments: {'order': first}),
+        child: const Text('VER',
+            style: TextStyle(
+                color: Colors.white, fontWeight: FontWeight.w800)),
+      ),
     );
   }
 

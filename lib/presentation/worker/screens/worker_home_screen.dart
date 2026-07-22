@@ -150,7 +150,7 @@ class _WorkerBottomNav extends StatelessWidget {
               if (i == 1) {
                 // Badge de novas solicitações
                 iconW = Obx(() {
-                  final count = ctrl.newOrders.length;
+                  final count = ctrl.incomingOrders.length;
                   return Stack(clipBehavior: Clip.none, children: [
                     Icon(sel ? item.activeIcon : item.icon,
                         color:

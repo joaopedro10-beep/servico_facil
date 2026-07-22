@@ -93,12 +93,13 @@ class _TopBar extends StatelessWidget {
         ),
         // Badge de novas solicitações
         Obx(() {
-          final count = ctrl.availableOrders.length;
+          final count = ctrl.incomingOrders.length;
           return Stack(clipBehavior: Clip.none, children: [
             IconButton(
               icon: const Icon(Icons.notifications_outlined,
                   color: Colors.white, size: 24),
-              onPressed: () {},
+              // CORREÇÃO: o sino não fazia nada — agora abre as notificações
+              onPressed: () => Get.toNamed(AppRoutes.notifications),
               padding: const EdgeInsets.all(8),
               constraints: const BoxConstraints(),
             ),
@@ -507,7 +508,7 @@ class _MonthlyServicesChart extends StatelessWidget {
                 int m = now.month - (5 - v.toInt());
                 if (m <= 0) m += 12;
                 return Text(
-                    DateFormat.MMM('pt').format(DateTime(2024, m)),
+                    DateFormat.MMM('pt_BR').format(DateTime(2024, m)),
                     style: const TextStyle(
                         fontSize: 9, color: WTheme.textGray));
               },
@@ -571,7 +572,7 @@ class _MonthlyEarningsChart extends StatelessWidget {
                 int m = now.month - (5 - v.toInt());
                 if (m <= 0) m += 12;
                 return Text(
-                    DateFormat.MMM('pt').format(DateTime(2024, m)),
+                    DateFormat.MMM('pt_BR').format(DateTime(2024, m)),
                     style: const TextStyle(
                         fontSize: 9, color: WTheme.textGray));
               },
