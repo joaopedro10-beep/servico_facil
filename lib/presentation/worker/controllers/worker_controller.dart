@@ -51,6 +51,10 @@ class WorkerController extends GetxController {
   // Pedidos disponíveis dispensados localmente pelo prestador (aba "Novas")
   final _dismissedOrderIds = <String>{}.obs;
 
+  /// Motivo (legível) de a lista de novas solicitações estar vazia por
+  /// bloqueio — exibido como banner na aba "Novas". Vazio = sem bloqueio.
+  final availableBlockReason = ''.obs;
+
   // Controle do alerta de nova solicitação:
   // guarda os ids já conhecidos para notificar apenas pedidos que CHEGARAM
   // enquanto o app está aberto (evita spam no primeiro snapshot).
@@ -92,8 +96,14 @@ class WorkerController extends GetxController {
       o.status == OrderStatus.inProgress)
       .toList();
 
+  /// Atendimento ATIVO agora (bloqueia novo aceite imediato):
+  /// arrived, inProgress, ou accepted SEM agendamento.
+  /// Pedidos aceitos COM scheduledAt são "agendados" — não contam como
+  /// ativos, permitindo ao prestador agendar vários trabalhos futuros.
   bool get hasActiveJob => allOrders.any((o) =>
-  o.status == OrderStatus.accepted || o.status == OrderStatus.inProgress);
+      o.status == OrderStatus.arrived ||
+      o.status == OrderStatus.inProgress ||
+      (o.status == OrderStatus.accepted && o.scheduledAt == null));
 
   List<OrderModel> get doneOrders =>
       allOrders.where((o) => o.status == OrderStatus.done).toList();
@@ -330,12 +340,13 @@ class WorkerController extends GetxController {
   /// Aceita o pedido. Retorna true em caso de sucesso — os chamadores
   /// (ex.: tela de solicitação) só devem navegar para o mapa se true.
   Future<bool> acceptOrder(OrderModel order,
-      {bool openNavigation = true}) async {
-    // Guarda local
-    if (hasActiveJob) {
+      {bool openNavigation = true, bool skipActiveGuard = false}) async {
+    // Guarda local (ignorada no fluxo de AGENDAMENTO, que aceita e já
+    // grava scheduledAt — trabalho agendado não conta como ativo)
+    if (!skipActiveGuard && hasActiveJob) {
       Get.snackbar(
         'Serviço em andamento',
-        'Conclua o serviço atual antes de aceitar um novo.',
+        'Conclua o serviço atual antes de aceitar outro — ou use a opção Agendar.',
         snackPosition: SnackPosition.BOTTOM,
         backgroundColor: const Color(0xFFF9A825),
         colorText: Colors.white,
@@ -427,6 +438,11 @@ class WorkerController extends GetxController {
     if (order.workerId == null || order.workerId!.isEmpty) {
       _dismissedOrderIds.add(order.id);
       availableOrders.refresh();
+      allOrders.refresh(); // garante rebuild da aba "Novas" e badges
+      Get.snackbar('Solicitação dispensada',
+          'Ela continua disponível para outros prestadores.',
+          snackPosition: SnackPosition.BOTTOM,
+          duration: const Duration(seconds: 2));
       return;
     }
 
@@ -498,8 +514,37 @@ class WorkerController extends GetxController {
         availableOrders.assignAll(list);
         _alertNewAvailableOrders(list);
       },
-      onError: (_) => availableOrders.clear(),
+      onError: (e) {
+        availableOrders.clear();
+        // Diagnóstico visível — antes o erro era engolido e a aba
+        // "Novas" ficava vazia sem explicação.
+        availableBlockReason.value =
+            e.toString().contains('permission-denied')
+                ? 'Sem permissão para ver solicitações. Verifique se seu '
+                    'perfil está aprovado e se você está DISPONÍVEL, e se '
+                    'as regras do Firestore estão atualizadas (v8).'
+                : 'Erro ao carregar solicitações. Verifique sua conexão.';
+      },
     );
+
+    // Motivos de elegibilidade local (sem erro de rede)
+    if (!w.isVerified || w.verificationStatus.name != 'approved') {
+      availableBlockReason.value =
+          'Seu perfil ainda não foi aprovado pelo administrador — você '
+          'receberá solicitações após a aprovação.';
+    } else if (w.isSuspended) {
+      availableBlockReason.value =
+          'Seu perfil está suspenso. Fale com o suporte.';
+    } else if (!w.isAvailable) {
+      availableBlockReason.value =
+          'Você está OFFLINE. Ative sua disponibilidade no painel para '
+          'receber novas solicitações.';
+    } else if (activeCats.isEmpty) {
+      availableBlockReason.value =
+          'Nenhuma categoria de serviço ativa no seu perfil.';
+    } else {
+      availableBlockReason.value = '';
+    }
   }
 
   /// Dispara um alerta (notificação local + snackbar) quando uma nova

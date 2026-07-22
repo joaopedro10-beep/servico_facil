@@ -4,8 +4,11 @@ import 'package:geolocator/geolocator.dart';
 import 'package:get/get.dart';
 
 import '../../../core/constants/app_routes.dart';
+import '../../../core/services/geocoding_service.dart';
 import '../../../data/datasources/firestore_datasource.dart';
+import 'package:intl/intl.dart';
 import '../../../data/models/order_model.dart';
+import '../widgets/service_route_map.dart';
 import '../controllers/worker_controller.dart';
 import 'worker_home_screen.dart' show WTheme;
 
@@ -31,6 +34,10 @@ class _WorkerRequestDetailScreenState
   OrderModel? order;
 
   double? distanceKm;
+  double? _myLat;
+  double? _myLng;
+  double? _destLat;
+  double? _destLng;
   double clientRating = 0;
   int clientReviews = 0;
   bool accepting = false;
@@ -68,15 +75,38 @@ class _WorkerRequestDetailScreenState
       }
     } catch (_) {}
 
-    // Distância até o local
+    // Coordenadas do destino: do pedido ou geocodificadas do endereço
+    // (endereços via CEP chegavam com lat/lng = 0 e o mapa não aparecia)
     try {
       if (o.address.lat != 0 || o.address.lng != 0) {
+        _destLat = o.address.lat;
+        _destLng = o.address.lng;
+      } else {
+        final r =
+            await GeocodingService.geocode(o.address.fullAddress);
+        if (r != null) {
+          _destLat = r.$1;
+          _destLng = r.$2;
+        }
+      }
+      if (mounted) setState(() {});
+    } catch (_) {}
+
+    // Distância até o local
+    try {
+      if (_destLat != null && _destLng != null) {
         final pos = await Geolocator.getCurrentPosition(
             locationSettings: const LocationSettings(
                 accuracy: LocationAccuracy.medium));
         final meters = Geolocator.distanceBetween(pos.latitude,
-            pos.longitude, o.address.lat, o.address.lng);
-        if (mounted) setState(() => distanceKm = meters / 1000);
+            pos.longitude, _destLat!, _destLng!);
+        if (mounted) {
+          setState(() {
+            distanceKm = meters / 1000;
+            _myLat = pos.latitude;
+            _myLng = pos.longitude;
+          });
+        }
       }
     } catch (_) {}
   }
@@ -84,15 +114,71 @@ class _WorkerRequestDetailScreenState
   Future<void> _accept() async {
     final o = order;
     if (o == null || accepting) return;
+
+    // REGRA DE NEGÓCIO: com um atendimento ATIVO, não é possível aceitar
+    // outro imediatamente — apenas AGENDAR para depois.
+    if (ctrl.hasActiveJob) {
+      await _scheduleInstead(o);
+      return;
+    }
+
     setState(() => accepting = true);
     try {
-      // CORREÇÃO (GetX): só abre a navegação se o aceite realmente
-      // funcionou — antes navegava mesmo com o aceite negado (o pedido
-      // seguia pendente e o slide de status "não funcionava").
+      // Só abre a navegação se o aceite realmente funcionou
       final ok = await ctrl.acceptOrder(o, openNavigation: false);
       if (ok && mounted) {
         Get.offNamed(AppRoutes.workerNavigation,
             arguments: {'orderId': o.id});
+      }
+    } finally {
+      if (mounted) setState(() => accepting = false);
+    }
+  }
+
+  /// Agenda o trabalho: escolhe data/hora, aceita o pedido e grava o
+  /// scheduledAt — SEM abrir a navegação (o atendimento atual continua).
+  Future<void> _scheduleInstead(OrderModel o) async {
+    final now = DateTime.now();
+    final date = await showDatePicker(
+      context: context,
+      initialDate: now.add(const Duration(days: 1)),
+      firstDate: now,
+      lastDate: now.add(const Duration(days: 60)),
+      helpText: 'Agendar para quando?',
+    );
+    if (date == null || !mounted) return;
+    final time = await showTimePicker(
+      context: context,
+      initialTime: const TimeOfDay(hour: 9, minute: 0),
+      helpText: 'Horário do atendimento',
+    );
+    if (time == null || !mounted) return;
+
+    final scheduled = DateTime(
+        date.year, date.month, date.day, time.hour, time.minute);
+
+    setState(() => accepting = true);
+    try {
+      final ok = await ctrl.acceptOrder(o,
+          openNavigation: false, skipActiveGuard: true);
+      if (!ok) return;
+      final ds = Get.find<FirestoreDatasource>();
+      await ds.scheduleOrder(o.id, scheduled);
+      await ds.saveNotification(
+        targetUserId: o.userId,
+        title: 'Serviço agendado! 📅',
+        body: 'Seu pedido de ${o.serviceCategory} foi agendado para '
+            '${DateFormat("dd/MM 'às' HH:mm", 'pt_BR').format(scheduled)}.',
+        type: 'order_update',
+        targetId: o.id,
+      );
+      if (mounted) {
+        Get.back();
+        Get.snackbar('Trabalho agendado!',
+            'Você pode iniciá-lo pela aba Aceitas na data marcada.',
+            snackPosition: SnackPosition.TOP,
+            backgroundColor: WTheme.primary,
+            colorText: Colors.white);
       }
     } finally {
       if (mounted) setState(() => accepting = false);
@@ -217,6 +303,30 @@ class _WorkerRequestDetailScreenState
             child: ListView(
               padding: const EdgeInsets.all(16),
               children: [
+                // ── Mapa do local (substitui o layout só-texto; o
+                //    endereço vira informação complementar abaixo) ─────────
+                if (_destLat != null && _destLng != null) ...[
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: SizedBox(
+                      height: 200,
+                      child: IgnorePointer(
+                        // preview estático — interação fica para a
+                        // tela de navegação após o aceite
+                        child: ServiceRouteMap(
+                          workerLat: _myLat ?? 0,
+                          workerLng: _myLng ?? 0,
+                          clientLat: _destLat!,
+                          clientLng: _destLng!,
+                          hasWorkerPosition:
+                              _myLat != null && _myLng != null,
+                          accentColor: WTheme.primary,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                ],
                 _InfoCard(
                   icon: Icons.location_on_rounded,
                   iconColor: WTheme.red,
@@ -319,8 +429,9 @@ class _WorkerRequestDetailScreenState
                             strokeWidth: 2.4,
                             valueColor: AlwaysStoppedAnimation(
                                 Colors.white)))
-                    : const Text('Aceitar',
-                        style: TextStyle(
+                    : Text(
+                        ctrl.hasActiveJob ? 'Agendar' : 'Aceitar',
+                        style: const TextStyle(
                             color: Colors.white,
                             fontSize: 16,
                             fontWeight: FontWeight.w800)),

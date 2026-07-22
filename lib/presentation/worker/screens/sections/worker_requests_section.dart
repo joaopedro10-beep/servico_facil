@@ -101,13 +101,46 @@ class _WorkerRequestsSectionState extends State<WorkerRequestsSection>
           return TabBarView(
             controller: _tab,
             children: [
-              _OrderList(
-                orders: novo,
-                ctrl: widget.ctrl,
-                emptyMsg: 'Nenhuma nova solicitação',
-                emptyIcon: Icons.receipt_long_outlined,
-                showActions: true,
-              ),
+              Column(children: [
+                // Banner de diagnóstico: explica POR QUE não há novas
+                // solicitações (offline, perfil não aprovado, regras...)
+                Obx(() {
+                  final reason = widget.ctrl.availableBlockReason.value;
+                  if (reason.isEmpty) return const SizedBox.shrink();
+                  return Container(
+                    width: double.infinity,
+                    margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: WTheme.amber.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                      border:
+                          Border.all(color: WTheme.amber.withOpacity(0.4)),
+                    ),
+                    child: Row(children: [
+                      const Icon(Icons.info_outline_rounded,
+                          color: WTheme.amber, size: 18),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(reason,
+                            style: const TextStyle(
+                                fontSize: 12,
+                                color: WTheme.textDark,
+                                height: 1.35)),
+                      ),
+                    ]),
+                  );
+                }),
+                Expanded(
+                  child: _OrderList(
+                    orders: novo,
+                    ctrl: widget.ctrl,
+                    emptyMsg: 'Nenhuma nova solicitação',
+                    emptyIcon: Icons.receipt_long_outlined,
+                    showActions: true,
+                  ),
+                ),
+              ]),
               _OrderList(
                 orders: aceitas,
                 ctrl: widget.ctrl,
