@@ -43,6 +43,8 @@ class AppRoutes {
   static const workerReports  = '/worker/reports';
   static const workerFinancial = '/worker/financial';
   static const workerSettings = '/worker/settings';
+  static const workerRequestDetail = '/worker/request-detail';
+  static const workerNavigation    = '/worker/navigation';
 
   // Admin
   static const adminHome = '/admin/home';

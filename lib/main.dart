@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:get/get.dart';
+import 'package:intl/date_symbol_data_local.dart';
+import 'package:intl/intl.dart';
 
 import 'core/bindings/auth_binding.dart';
 import 'core/bindings/initial_binding.dart';
@@ -34,6 +36,8 @@ import 'presentation/client/controllers/client_profile_controller.dart';
 
 // ── Worker ───────────────────────────────────────────────────────────────────
 import 'presentation/worker/screens/worker_home_screen.dart';
+import 'presentation/worker/screens/worker_request_detail_screen.dart';
+import 'presentation/worker/screens/worker_navigation_screen.dart';
 import 'presentation/worker/screens/worker_profile_screen.dart';
 import 'presentation/worker/screens/edit_worker_profile_screen.dart';
 import 'presentation/worker/screens/earnings_screen.dart';
@@ -81,6 +85,12 @@ import 'data/datasources/admin_datasource.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Inicializa os dados de data/hora do intl para pt_BR ANTES de qualquer
+  // tela usar DateFormat('...', 'pt_BR'). Sem isso, telas como Notificações
+  // e Relatórios quebram com LocaleDataException e "não carregam".
+  await initializeDateFormatting('pt_BR');
+  Intl.defaultLocale = 'pt_BR';
 
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
@@ -135,6 +145,8 @@ class ServicoFacilApp extends StatelessWidget {
       initialRoute: AppRoutes.splash,
 
       // Localização para DatePicker em pt-BR
+      locale: const Locale('pt', 'BR'),
+      fallbackLocale: const Locale('pt', 'BR'),
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
@@ -307,7 +319,15 @@ class ServicoFacilApp extends StatelessWidget {
     // ── Worker — telas do drawer ──────────────────────────────────────
     GetPage(
       name: AppRoutes.workerClients,
-      page: () => WorkerClientsSection(ctrl: Get.find<WorkerController>()),
+      // IMPORTANTE: seções abertas como rota precisam de Scaffold próprio.
+      // Sem Scaffold não há Material ancestor → textos com sublinhado
+      // amarelo, fundo preto e conteúdo sob a status bar.
+      page: () => Scaffold(
+        backgroundColor: const Color(0xFFF5F7FA),
+        body: SafeArea(
+          child: WorkerClientsSection(ctrl: Get.find<WorkerController>()),
+        ),
+      ),
       binding: BindingsBuilder(() {
         if (!Get.isRegistered<WorkerController>()) {
           Get.put(WorkerController());
@@ -317,8 +337,14 @@ class ServicoFacilApp extends StatelessWidget {
     ),
     GetPage(
       name: AppRoutes.workerReports,
-      page: () =>
-          WorkerReportsSection(ctrl: Get.find<WorkerController>()),
+      // Correção do erro de visualização em Relatórios: a seção era
+      // renderizada sem Scaffold/Material, quebrando o layout.
+      page: () => Scaffold(
+        backgroundColor: const Color(0xFFF5F7FA),
+        body: SafeArea(
+          child: WorkerReportsSection(ctrl: Get.find<WorkerController>()),
+        ),
+      ),
       binding: BindingsBuilder(() {
         if (!Get.isRegistered<WorkerController>()) {
           Get.put(WorkerController());
@@ -359,6 +385,23 @@ class ServicoFacilApp extends StatelessWidget {
         }
       }),
       transition: Transition.rightToLeft,
+    ),
+
+    // ── Worker — fluxo estilo 99 ──────────────────────────────────────
+    GetPage(
+      name: AppRoutes.workerRequestDetail,
+      page: () => const WorkerRequestDetailScreen(),
+      binding: BindingsBuilder(() {
+        if (!Get.isRegistered<WorkerController>()) {
+          Get.put(WorkerController());
+        }
+      }),
+      transition: Transition.downToUp,
+    ),
+    GetPage(
+      name: AppRoutes.workerNavigation,
+      page: () => const WorkerNavigationScreen(),
+      transition: Transition.fadeIn,
     ),
 
     // ── Orders ───────────────────────────────────────────────────────
