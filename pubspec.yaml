@@ -4,10 +4,11 @@ publish_to: 'none'
 version: 1.0.0+1
 
 environment:
-  sdk: '>=3.0.0 <4.0.0'
+  # ↑ v6: mínimo elevado de 3.0.0 para 3.4.0 — exigido pelo flutter_map 7
+  # (Flutter ≥ 3.22). Se seu Flutter for mais antigo, atualize o SDK antes.
+  sdk: '>=3.4.0 <4.0.0'
 
 dependencies:
-  path_provider: ^2.1.0
   flutter:
     sdk: flutter
   flutter_localizations:
@@ -30,12 +31,16 @@ dependencies:
   cached_network_image: ^3.4.1
   image_picker: ^1.1.2
 
-  # ── Localização ──────────────────────────────────────────────────────────────
+  # ── Localização e mapa (fluxo estilo 99) ────────────────────────────────────
   geolocator: ^13.0.2
+  # [NOVO] Mapa da WorkerNavigationScreen — OpenStreetMap, sem chave de API
+  flutter_map: ^7.0.2
+  latlong2: ^0.9.1
 
   # ── Armazenamento local ──────────────────────────────────────────────────────
   shared_preferences: ^2.3.2
   flutter_secure_storage: ^9.2.2
+  path_provider: ^2.1.0
 
   # ── Upload ───────────────────────────────────────────────────────────────────
   http: ^1.2.2
