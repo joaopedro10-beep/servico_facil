@@ -244,24 +244,32 @@ class FirestoreDatasource {
   /// Sem orderBy no Firestore (evita composite index — sort em memória).
   Stream<List<OrderModel>> watchAvailableOrders({
     required List<String> activeCategories,
-    required bool hasActiveJob,
+    // ignore: avoid_unused_constructor_parameters
+    bool hasActiveJob = false, // [CORRIGIDO] não bloqueia mais o stream
     required bool isVerified,
     required bool isAvailable,
     required bool isSuspended,
     required String verificationStatus,
   }) {
+    // CORREÇÃO da "solicitação não aparece": o gate antigo incluía
+    // !hasActiveJob — bastava UM pedido aceito/em andamento (inclusive
+    // sobras de testes) para o stream virar Stream.value([]) PARA SEMPRE
+    // e nenhuma solicitação nova chegar ao prestador. Com o fluxo de
+    // AGENDAMENTO, o prestador precisa VER as novas solicitações mesmo
+    // ocupado (para agendá-las); quem impede o aceite simultâneo é a
+    // guarda do acceptOrder, não a visibilidade.
     final eligible = isVerified &&
         isAvailable &&
         !isSuspended &&
         verificationStatus == 'approved' &&
-        !hasActiveJob &&
         activeCategories.isNotEmpty;
 
     if (!eligible) return Stream.value([]);
 
-    final normalizedCats = activeCategories
-        .map((c) => c.trim().toLowerCase())
-        .toSet();
+    // Normalização com acentos (mesma régua da precificação):
+    // "Elétricista" == "eletricista"
+    final normalizedCats =
+        activeCategories.map(_normalizeCategory).toSet();
 
     return _fb.ordersRef
         .where('workerId', isEqualTo: '')
@@ -273,8 +281,8 @@ class FirestoreDatasource {
               .toList();
 
           final filtered = orders.where((order) {
-            final orderCat = order.serviceCategory.trim().toLowerCase();
-            return normalizedCats.contains(orderCat);
+            return normalizedCats
+                .contains(_normalizeCategory(order.serviceCategory));
           }).toList();
 
           filtered.sort((a, b) => b.createdAt.compareTo(a.createdAt));
@@ -726,6 +734,13 @@ class FirestoreDatasource {
           'platformFeeAmount': fee,
           'netAmount':         net,
           'price':             gross, // compatibilidade com telas antigas
+          // Aliases pedidos pelo produto (mesmos valores, nomes explícitos)
+          'totalWorkedMinutes': minutes,
+          'totalWorkedHours':
+              double.parse((minutes / 60.0).toStringAsFixed(2)),
+          'finalPrice':   gross,
+          'platformFee':  fee,
+          'workerProfit': net,
         });
 
         final recordRef = _fb.financialRecordsRef.doc();
@@ -757,6 +772,22 @@ class FirestoreDatasource {
     } on FirebaseException catch (e) {
       throw ServerException('Erro ao finalizar o serviço: ${e.message}');
     }
+  }
+
+  /// Posição ao vivo do prestador no pedido (rastreamento do cliente).
+  Future<void> updateWorkerLiveLocation(
+    String orderId, {
+    required double lat,
+    required double lng,
+    double speedKmh = 0,
+  }) async {
+    await _fb.ordersRef.doc(orderId).update({
+      'workerLat':         lat,
+      'workerLng':         lng,
+      'workerSpeedKmh':    double.parse(speedKmh.toStringAsFixed(1)),
+      'locationUpdatedAt': FieldValue.serverTimestamp(),
+      'updatedAt':         FieldValue.serverTimestamp(),
+    });
   }
 
   /// Registros financeiros do prestador (tela Financeiro).
@@ -995,19 +1026,53 @@ class FirestoreDatasource {
     }
   }
 
-  Future<void> sendMessage(MessageModel message) async {
+  Future<void> sendMessage(MessageModel message,
+      {String? receiverId}) async {
     try {
       final msgRef = _fb.messagesRef(message.chatId).doc();
       await _fb.runBatch((batch) async {
-        batch.set(msgRef, message.toMap());
+        batch.set(msgRef, {
+          ...message.toMap(),
+          // Campos do chat interno estilo Uber
+          if (receiverId != null) 'receiverId': receiverId,
+          'type': message.imageUrl != null ? 'image' : 'text',
+        });
         batch.update(_fb.chatsRef.doc(message.chatId), {
           'lastMessage':   message.content ?? '📷 Foto',
           'lastMessageAt': FieldValue.serverTimestamp(),
         });
       });
+
+      // Notificação in-app/push local para o destinatário
+      if (receiverId != null && receiverId.isNotEmpty) {
+        try {
+          await saveNotification(
+            targetUserId: receiverId,
+            title: 'Nova mensagem 💬',
+            body: message.content ?? '📷 Foto',
+            type: 'new_message',
+            targetId: message.chatId,
+          );
+        } catch (_) {}
+      }
     } on FirebaseException catch (e) {
       throw ServerException('Erro ao enviar mensagem: ${e.message}');
     }
+  }
+
+  /// Indicador "digitando…" — grava no doc do chat (campo por usuário).
+  Future<void> setTypingStatus(
+      String chatId, String uid, bool typing) async {
+    try {
+      await _fb.chatsRef.doc(chatId).update({'typing_$uid': typing});
+    } catch (_) {
+      // Chat pode ainda não existir — indicador é best-effort.
+    }
+  }
+
+  /// Stream do doc do chat (typing, lastMessage etc.).
+  Stream<Map<String, dynamic>?> watchChatDoc(String chatId) {
+    return _fb.chatsRef.doc(chatId).snapshots().map((d) => d.data());
   }
 
   Stream<List<MessageModel>> watchMessages(String chatId) {

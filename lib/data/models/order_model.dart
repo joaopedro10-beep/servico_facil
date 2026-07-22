@@ -35,6 +35,12 @@ class OrderModel extends Equatable {
   final double? netAmount;          // líquido do prestador
   final int?    durationMinutes;    // duração total trabalhada
 
+  // ── Rastreamento ao vivo (publicado pelo prestador durante o
+  //    deslocamento/atendimento; o cliente acompanha no mapa) ──────────────
+  final double? workerLat;
+  final double? workerLng;
+  final double? workerSpeedKmh;
+
   // Nomes para exibição rápida (evita joins extras)
   final String? clientName;
   final String? workerName;
@@ -63,6 +69,9 @@ class OrderModel extends Equatable {
     this.platformFeeAmount,
     this.netAmount,
     this.durationMinutes,
+    this.workerLat,
+    this.workerLng,
+    this.workerSpeedKmh,
     this.clientName,
     this.workerName,
   });
@@ -98,6 +107,9 @@ class OrderModel extends Equatable {
           (map['platformFeeAmount'] as num?)?.toDouble(),
       netAmount: (map['netAmount'] as num?)?.toDouble(),
       durationMinutes: (map['durationMinutes'] as num?)?.toInt(),
+      workerLat: (map['workerLat'] as num?)?.toDouble(),
+      workerLng: (map['workerLng'] as num?)?.toDouble(),
+      workerSpeedKmh: (map['workerSpeedKmh'] as num?)?.toDouble(),
       clientName: map['clientName'],
       workerName: map['workerName'],
     );
@@ -181,6 +193,9 @@ class OrderModel extends Equatable {
       platformFeeAmount: platformFeeAmount ?? this.platformFeeAmount,
       netAmount: netAmount ?? this.netAmount,
       durationMinutes: durationMinutes ?? this.durationMinutes,
+      workerLat: workerLat,
+      workerLng: workerLng,
+      workerSpeedKmh: workerSpeedKmh,
       clientName: clientName,
       workerName: workerName,
     );
