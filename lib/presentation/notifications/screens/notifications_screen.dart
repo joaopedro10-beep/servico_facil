@@ -31,6 +31,23 @@ class NotificationsScreen extends StatelessWidget {
               child: CircularProgressIndicator.adaptive());
         }
 
+        if (ctrl.hasError.value) {
+          return Center(
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              const Icon(Icons.cloud_off_outlined,
+                  size: 56, color: AppColors.textHint),
+              const SizedBox(height: 12),
+              const Text('Não foi possível carregar as notificações.',
+                  style: TextStyle(color: AppColors.textSecondary)),
+              const SizedBox(height: 12),
+              TextButton(
+                onPressed: ctrl.retry,
+                child: const Text('Tentar novamente'),
+              ),
+            ]),
+          );
+        }
+
         if (ctrl.notifications.isEmpty) {
           return const _EmptyNotifications();
         }
@@ -58,9 +75,12 @@ class NotificationsScreen extends StatelessWidget {
     switch (n.type) {
       case 'new_order':
       case 'order_update':
+      case 'order_accepted':
+      case 'order_scheduled':
+      case 'order_started':
         if (n.targetId != null) {
           Get.toNamed(AppRoutes.orderDetail,
-              arguments: {'orderId': n.targetId, 'isWorker': false});
+              arguments: {'orderId': n.targetId});
         }
         break;
       case 'new_message':

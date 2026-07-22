@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:get/get.dart';
 
 import '../../../core/services/firebase_service.dart';
@@ -26,14 +27,27 @@ class NotificationItem {
   });
 
   factory NotificationItem.fromMap(Map<String, dynamic> map, String docId) {
+    // Parsing defensivo: createdAt pode ser Timestamp, null (serverTimestamp
+    // pendente no snapshot local) ou até int (docs antigos). Antes, um
+    // formato inesperado derrubava a tela inteira de notificações.
+    DateTime created = DateTime.now();
+    final raw = map['createdAt'];
+    if (raw is Timestamp) {
+      created = raw.toDate();
+    } else if (raw is DateTime) {
+      created = raw;
+    } else if (raw is int) {
+      created = DateTime.fromMillisecondsSinceEpoch(raw);
+    }
+
     return NotificationItem(
       id: docId,
-      title: map['title'] ?? '',
-      body: map['body'] ?? '',
-      type: map['type'] ?? '',
-      targetId: map['targetId'],
-      isRead: map['isRead'] ?? false,
-      createdAt: (map['createdAt'] as dynamic)?.toDate() ?? DateTime.now(),
+      title: map['title']?.toString() ?? '',
+      body: map['body']?.toString() ?? '',
+      type: map['type']?.toString() ?? '',
+      targetId: map['targetId']?.toString(),
+      isRead: map['isRead'] == true,
+      createdAt: created,
     );
   }
 }
@@ -45,6 +59,7 @@ class NotificationsController extends GetxController {
 
   final notifications = <NotificationItem>[].obs;
   final isLoading = true.obs;
+  final hasError = false.obs;
   StreamSubscription? _sub;
 
   @override
@@ -59,26 +74,46 @@ class NotificationsController extends GetxController {
     super.onClose();
   }
 
+  /// Recarrega a stream — usado pelo botão "Tentar novamente".
+  void retry() => _startStream();
+
   void _startStream() {
     isLoading.value = true;
+    hasError.value = false;
     _sub?.cancel();
     _sub = _ds.watchNotifications(_fb.uid).listen((list) {
-      notifications.assignAll(
-          list.map((m) => NotificationItem.fromMap(m, m['id'] as String)).toList());
+      // Parsing item a item: um documento malformado é ignorado em vez
+      // de derrubar a tela inteira (motivo do "não carrega").
+      final parsed = <NotificationItem>[];
+      for (final m in list) {
+        try {
+          parsed.add(
+              NotificationItem.fromMap(m, m['id']?.toString() ?? ''));
+        } catch (_) {}
+      }
+      notifications.assignAll(parsed);
       _notifService.unreadCount.value =
-          notifications.where((n) => !n.isRead).length;
+          parsed.where((n) => !n.isRead).length;
       isLoading.value = false;
-    }, onError: (_) => isLoading.value = false);
+    }, onError: (_) {
+      isLoading.value = false;
+      hasError.value = true;
+    });
   }
 
   Future<void> markAllRead() async {
-    await _ds.markAllNotificationsRead(_fb.uid);
-    for (final n in notifications) {
-      if (!n.isRead) notifications.refresh();
+    try {
+      await _ds.markAllNotificationsRead(_fb.uid);
+      // A stream do Firestore reemite a lista atualizada automaticamente.
+    } catch (_) {
+      Get.snackbar('Erro', 'Não foi possível marcar como lidas.',
+          snackPosition: SnackPosition.BOTTOM);
     }
   }
 
   Future<void> markRead(String id) async {
-    await _ds.markNotificationRead(id);
+    try {
+      await _ds.markNotificationRead(id);
+    } catch (_) {}
   }
 }

@@ -67,6 +67,39 @@ class NotificationService extends GetxService {
 
   // ── Foreground ────────────────────────────────────────────────────────────
 
+  /// Exibe uma notificação local imediata (usada para alertas em tempo real
+  /// gerados dentro do próprio app, ex.: nova solicitação para o prestador).
+  Future<void> showLocal({
+    required String title,
+    required String body,
+    String? type,
+    String? targetId,
+  }) async {
+    try {
+      await _localPlugin.show(
+        DateTime.now().millisecondsSinceEpoch.remainder(100000),
+        title,
+        body,
+        NotificationDetails(
+          android: AndroidNotificationDetails(
+            _channelId,
+            _channelName,
+            importance: Importance.high,
+            priority: Priority.high,
+            icon: '@mipmap/ic_launcher',
+          ),
+          iOS: const DarwinNotificationDetails(),
+        ),
+        payload: _encodePayload({
+          if (type != null) 'type': type,
+          if (targetId != null) 'targetId': targetId,
+        }),
+      );
+    } catch (e) {
+      debugPrint('[NotificationService] showLocal falhou: $e');
+    }
+  }
+
   Future<void> _handleForeground(RemoteMessage message) async {
     final n = message.notification;
     if (n == null) return;
@@ -105,9 +138,12 @@ class NotificationService extends GetxService {
     switch (type) {
       case 'new_order':
       case 'order_update':
+      case 'order_accepted':
+      case 'order_scheduled':
+      case 'order_started':
         if (targetId != null) {
           Get.toNamed(AppRoutes.orderDetail,
-              arguments: {'orderId': targetId, 'isWorker': false});
+              arguments: {'orderId': targetId});
         }
         break;
       case 'new_message':

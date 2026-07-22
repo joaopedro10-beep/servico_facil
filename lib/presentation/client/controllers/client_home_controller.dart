@@ -71,6 +71,7 @@ class ClientHomeController extends GetxController {
 
   // Notificações (badge)
   final notificationCount = 0.obs;
+  StreamSubscription? _notifSub;
 
   // Resultado final após filtros
 
@@ -97,6 +98,7 @@ class ClientHomeController extends GetxController {
   @override
   void onClose() {
     _workersSub?.cancel();
+    _notifSub?.cancel();
     super.onClose();
   }
 
@@ -150,7 +152,8 @@ class ClientHomeController extends GetxController {
           perm == LocationPermission.denied) return;
 
       final pos = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.medium,
+        locationSettings:
+            const LocationSettings(accuracy: LocationAccuracy.medium),
       );
       userLat.value = pos.latitude;
       userLng.value = pos.longitude;
@@ -201,8 +204,15 @@ class ClientHomeController extends GetxController {
   // ── Notificações ──────────────────────────────────────────────────────────
 
   Future<void> _loadNotificationCount() async {
-    // Placeholder — será implementado no prompt de notificações
-    notificationCount.value = 0;
+    // CORREÇÃO: era um placeholder fixo em 0. Agora escuta as notificações
+    // do usuário em tempo real e conta as não lidas para o badge do sino.
+    _notifSub?.cancel();
+    try {
+      _notifSub = _ds.watchNotifications(_fb.uid).listen((list) {
+        notificationCount.value =
+            list.where((n) => n['isRead'] != true).length;
+      }, onError: (_) {});
+    } catch (_) {}
   }
 
 
