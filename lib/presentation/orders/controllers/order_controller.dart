@@ -105,7 +105,8 @@ class OrderController extends GetxController {
       }
 
       final pos = await Geolocator.getCurrentPosition(
-          desiredAccuracy: LocationAccuracy.medium);
+          locationSettings: const LocationSettings(
+              accuracy: LocationAccuracy.medium));
 
       sheetAddress.value = UserAddress(
         cep: '',
@@ -182,6 +183,12 @@ class OrderController extends GetxController {
             neighborhood: '',
           );
 
+      // Nome do cliente para o card do prestador (antes ficava "Cliente")
+      String? clientName;
+      try {
+        clientName = (await _ds.getUser(uid))?.name;
+      } catch (_) {}
+
       final order = await _ds.createOrder(OrderModel(
         id: '',
         userId: uid,
@@ -195,6 +202,7 @@ class OrderController extends GetxController {
         address: address,
         createdAt: DateTime.now(),
         updatedAt: DateTime.now(),
+        clientName: clientName,
         workerName: worker.name,
       ));
 
@@ -264,37 +272,53 @@ class OrderController extends GetxController {
     }
   }
 
-  Future<void> acceptOrder() => _changeStatus(
-        OrderStatus.accepted,
-        notifyUserId: currentOrder.value!.userId,
-        notifyTitle: 'Pedido aceito!',
-        notifyBody:
-            'Seu pedido de ${currentOrder.value!.serviceCategory} foi aceito pelo profissional.',
-      );
+  Future<void> acceptOrder() async {
+    final order = currentOrder.value;
+    if (order == null) return;
+    await _changeStatus(
+      OrderStatus.accepted,
+      notifyUserId: order.userId,
+      notifyTitle: 'Pedido aceito!',
+      notifyBody:
+          'Seu pedido de ${order.serviceCategory} foi aceito pelo profissional.',
+    );
+  }
 
-  Future<void> refuseOrder() => _changeStatus(
-        OrderStatus.cancelled,
-        notifyUserId: currentOrder.value!.userId,
-        notifyTitle: 'Pedido recusado',
-        notifyBody:
-            'Infelizmente o profissional não pôde aceitar seu pedido agora.',
-      );
+  Future<void> refuseOrder() async {
+    final order = currentOrder.value;
+    if (order == null) return;
+    await _changeStatus(
+      OrderStatus.cancelled,
+      notifyUserId: order.userId,
+      notifyTitle: 'Pedido recusado',
+      notifyBody:
+          'Infelizmente o profissional não pôde aceitar seu pedido agora.',
+    );
+  }
 
-  Future<void> startOrder() => _changeStatus(
-        OrderStatus.inProgress,
-        notifyUserId: currentOrder.value!.userId,
-        notifyTitle: 'Serviço iniciado!',
-        notifyBody:
-            'O profissional iniciou o serviço de ${currentOrder.value!.serviceCategory}.',
-      );
+  Future<void> startOrder() async {
+    final order = currentOrder.value;
+    if (order == null) return;
+    await _changeStatus(
+      OrderStatus.inProgress,
+      notifyUserId: order.userId,
+      notifyTitle: 'Serviço iniciado!',
+      notifyBody:
+          'O profissional iniciou o serviço de ${order.serviceCategory}.',
+    );
+  }
 
-  Future<void> completeOrder() => _changeStatus(
-        OrderStatus.done,
-        notifyUserId: currentOrder.value!.userId,
-        notifyTitle: 'Serviço concluído!',
-        notifyBody:
-            'Que tal avaliar o profissional? Sua opinião ajuda outros clientes.',
-      );
+  Future<void> completeOrder() async {
+    final order = currentOrder.value;
+    if (order == null) return;
+    await _changeStatus(
+      OrderStatus.done,
+      notifyUserId: order.userId,
+      notifyTitle: 'Serviço concluído!',
+      notifyBody:
+          'Que tal avaliar o profissional? Sua opinião ajuda outros clientes.',
+    );
+  }
 
   /// Agendamento pelo prestador: salva scheduledAt como Timestamp, notifica cliente.
   Future<void> scheduleOrder(DateTime scheduledAt) async {
@@ -310,7 +334,7 @@ class OrderController extends GetxController {
       await _ds.updateOrderSchedule(order.id, scheduledAt);
       await _ds.saveNotification(
         targetUserId: order.userId,
-        title: 'Servico agendado!',
+        title: 'Serviço agendado!',
         body: 'Seu pedido de ' + order.serviceCategory +
               ' foi agendado para $day/$month as $hour:$minute.',
         type: 'order_scheduled',

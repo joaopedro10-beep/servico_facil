@@ -9,6 +9,7 @@ import '../../../core/services/cloudinary_service.dart';
 import '../../../core/services/firebase_service.dart';
 import '../../../data/datasources/firestore_datasource.dart';
 import '../../../data/models/message_model.dart';
+import '../../../data/models/order_model.dart';
 
 class ChatController extends GetxController {
   final FirestoreDatasource _ds = Get.find<FirestoreDatasource>();
@@ -20,13 +21,14 @@ class ChatController extends GetxController {
   final isLoadingMessages = true.obs;
   final isSendingImage = false.obs;
   final otherUserLastSeen = Rxn<DateTime>();
+  final initError = ''.obs; // erro ao resolver os dados do chat
 
   // Chat IDs
   late String chatId;
-  late String otherUserId;
-  late bool otherIsWorker;
-  late String otherName;
-  late String? otherPhotoUrl;
+  String otherUserId = '';
+  bool otherIsWorker = false;
+  String otherName = 'Usuário';
+  String? otherPhotoUrl;
 
   final messageCtrl = TextEditingController();
   StreamSubscription? _msgSub;
@@ -37,15 +39,87 @@ class ChatController extends GetxController {
   @override
   void onInit() {
     super.onInit();
-    final args = Get.arguments as Map<String, dynamic>;
-    chatId = args['chatId'] as String;
-    otherUserId = args['otherUserId'] as String;
-    otherIsWorker = args['otherIsWorker'] as bool? ?? false;
-    otherName = args['otherName'] as String? ?? 'Usuário';
-    otherPhotoUrl = args['otherPhotoUrl'] as String?;
+    // CORREÇÃO: a tela de chat era aberta com formatos diferentes de
+    // argumento (String com o id do pedido, Map completo, Map só com
+    // 'chatId' vindo de notificações) e quebrava com cast inválido.
+    // Agora qualquer formato é aceito; dados faltantes são resolvidos
+    // a partir do pedido/chat no Firestore (chatId == orderId).
+    final args = Get.arguments;
+
+    if (args is String) {
+      chatId = args;
+    } else if (args is OrderModel) {
+      // Algumas telas passam o pedido inteiro
+      chatId = args.id;
+      final uid = _fb.currentUser?.uid ?? '';
+      final amClient = args.userId == uid;
+      otherIsWorker = amClient;
+      otherUserId = amClient ? (args.workerId ?? '') : args.userId;
+      otherName = (amClient ? args.workerName : args.clientName) ??
+          (amClient ? 'Profissional' : 'Cliente');
+    } else if (args is Map) {
+      final map = Map<String, dynamic>.from(args);
+      chatId = (map['chatId'] ?? map['orderId'] ?? '') as String;
+      otherUserId = map['otherUserId'] as String? ?? '';
+      otherIsWorker = map['otherIsWorker'] as bool? ?? false;
+      otherName = map['otherName'] as String? ?? 'Usuário';
+      otherPhotoUrl = map['otherPhotoUrl'] as String?;
+    } else {
+      chatId = '';
+    }
+
+    if (chatId.isEmpty) {
+      initError.value = 'Conversa não encontrada.';
+      isLoadingMessages.value = false;
+      return;
+    }
 
     _startMessageStream();
-    _watchLastSeen();
+
+    if (otherUserId.isEmpty) {
+      _resolveOtherParticipant();
+    } else {
+      _watchLastSeen();
+    }
+  }
+
+  /// Descobre quem é o outro participante a partir do pedido
+  /// (chatId == orderId) e inicializa o doc do chat se necessário.
+  Future<void> _resolveOtherParticipant() async {
+    try {
+      final uid = _fb.uid;
+      final order = await _ds.getOrder(chatId);
+      if (order != null) {
+        final amClient = order.userId == uid;
+        otherIsWorker = amClient;
+        otherUserId = amClient ? (order.workerId ?? '') : order.userId;
+        otherName = (amClient
+                ? order.workerName
+                : order.clientName) ??
+            (amClient ? 'Profissional' : 'Cliente');
+
+        // Garante o doc do chat (participants) para a lista de conversas
+        if (order.workerId != null && order.workerId!.isNotEmpty) {
+          await _ds.initChat(
+            orderId: order.id,
+            userId: order.userId,
+            workerId: order.workerId!,
+          );
+        }
+      } else {
+        // Sem pedido: tenta pelo doc do chat
+        final chat = await _ds.getChat(chatId);
+        final participants =
+            List<String>.from(chat?['participants'] ?? const []);
+        otherUserId = participants
+            .firstWhere((p) => p != uid, orElse: () => '');
+      }
+      // Força o rebuild do cabeçalho (o Obx da AppBar escuta este Rx)
+      otherUserLastSeen.refresh();
+      if (otherUserId.isNotEmpty) _watchLastSeen();
+    } catch (_) {
+      // Chat continua funcional mesmo sem os dados do outro usuário.
+    }
   }
 
   @override

@@ -223,17 +223,29 @@ class ClientController extends GetxController {
         clientName:      user?.name,
       );
 
-      await _ds.createOrder(order);
+      final created = await _ds.createOrder(order);
 
-      // Notifica prestadores disponíveis da categoria
-      // (Cloud Function ou datasource faz o dispatch)
-      await _ds.saveNotification(
-        targetUserId: 'broadcast_${selectedCategory.value}',
-        title:        'Nova solicitação de ${selectedCategory.value}',
-        body:         descriptionCtrl.text.trim(),
-        type:         'new_order',
-        targetId:     selectedCategory.value,
-      );
+      // CORREÇÃO: antes era salvo um doc com targetUserId
+      // 'broadcast_<categoria>', que nenhum prestador lê. Agora notificamos
+      // diretamente os prestadores elegíveis da categoria (fan-out feito no
+      // app, já que o projeto não usa Cloud Functions). Além disso, o
+      // prestador logado recebe alerta em tempo real pelo stream de
+      // pedidos disponíveis (WorkerController).
+      final workerIds = await _ds.getEligibleWorkerIdsByCategory(
+          selectedCategory.value);
+      for (final wid in workerIds) {
+        try {
+          await _ds.saveNotification(
+            targetUserId: wid,
+            title:    'Nova solicitação de ${selectedCategory.value}',
+            body:     descriptionCtrl.text.trim(),
+            type:     'new_order',
+            targetId: created.id,
+          );
+        } catch (_) {
+          // Uma falha individual não deve interromper as demais.
+        }
+      }
 
       submitSuccess.value = true;
       // NÃO chama clearForm() aqui — o formulário é limpo pelo botão
