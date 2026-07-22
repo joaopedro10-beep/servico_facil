@@ -23,6 +23,10 @@ class ChatController extends GetxController {
   final otherUserLastSeen = Rxn<DateTime>();
   final initError = ''.obs; // erro ao resolver os dados do chat
 
+  // Chat interno estilo Uber
+  final otherIsTyping = false.obs;   // indicador "digitando…"
+  final isConversationClosed = false.obs; // trava quando o serviço finaliza
+
   // Chat IDs
   late String chatId;
   String otherUserId = '';
@@ -33,6 +37,9 @@ class ChatController extends GetxController {
   final messageCtrl = TextEditingController();
   StreamSubscription? _msgSub;
   StreamSubscription? _lastSeenSub;
+  StreamSubscription? _chatDocSub;
+  StreamSubscription? _orderStatusSub;
+  Timer? _typingDebounce;
 
   // ── Init ──────────────────────────────────────────────────────────────────
 
@@ -75,6 +82,9 @@ class ChatController extends GetxController {
     }
 
     _startMessageStream();
+    _startChatDocStream();
+    _startOrderStatusStream();
+    messageCtrl.addListener(_onTypingChanged);
 
     if (otherUserId.isEmpty) {
       _resolveOtherParticipant();
@@ -122,10 +132,58 @@ class ChatController extends GetxController {
     }
   }
 
+  // ── Tempo real: typing + encerramento da conversa ────────────────────────
+
+  void _startChatDocStream() {
+    _chatDocSub = _ds.watchChatDoc(chatId).listen((data) {
+      if (data == null) return;
+      // "digitando…" do outro participante
+      if (otherUserId.isNotEmpty) {
+        otherIsTyping.value = data['typing_$otherUserId'] == true;
+      }
+    }, onError: (_) {});
+  }
+
+  /// Encerra a conversa automaticamente quando o serviço é finalizado
+  /// (chatId == orderId): o campo de texto é travado e um aviso aparece.
+  void _startOrderStatusStream() {
+    _orderStatusSub = _ds.watchOrder(chatId).listen((o) {
+      if (o == null) return;
+      final closed = o.status == OrderStatus.done ||
+          o.status == OrderStatus.cancelled;
+      if (closed != isConversationClosed.value) {
+        isConversationClosed.value = closed;
+        if (closed) _setTyping(false);
+      }
+    }, onError: (_) {});
+  }
+
+  void _onTypingChanged() {
+    if (isConversationClosed.value) return;
+    _setTyping(messageCtrl.text.isNotEmpty);
+    // Auto-desliga após 3 s sem digitar
+    _typingDebounce?.cancel();
+    _typingDebounce = Timer(const Duration(seconds: 3), () {
+      _setTyping(false);
+    });
+  }
+
+  bool _lastTypingSent = false;
+  void _setTyping(bool typing) {
+    if (typing == _lastTypingSent) return;
+    _lastTypingSent = typing;
+    _ds.setTypingStatus(chatId, _fb.uid, typing);
+  }
+
   @override
   void onClose() {
     _msgSub?.cancel();
     _lastSeenSub?.cancel();
+    _chatDocSub?.cancel();
+    _orderStatusSub?.cancel();
+    _typingDebounce?.cancel();
+    messageCtrl.removeListener(_onTypingChanged);
+    _setTyping(false);
     messageCtrl.dispose();
     super.onClose();
   }
@@ -150,9 +208,11 @@ class ChatController extends GetxController {
   // ── Enviar texto ──────────────────────────────────────────────────────────
 
   Future<void> sendText() async {
+    if (isConversationClosed.value) return;
     final text = messageCtrl.text.trim();
     if (text.isEmpty) return;
     messageCtrl.clear();
+    _setTyping(false);
 
     final msg = MessageModel(
       id: '',
@@ -161,12 +221,14 @@ class ChatController extends GetxController {
       content: text,
       createdAt: DateTime.now(),
     );
-    await _ds.sendMessage(msg);
+    await _ds.sendMessage(msg,
+        receiverId: otherUserId.isNotEmpty ? otherUserId : null);
   }
 
   // ── Enviar imagem ─────────────────────────────────────────────────────────
 
   Future<void> sendImage() async {
+    if (isConversationClosed.value) return;
     final xFile = await _picker.pickImage(
       source: ImageSource.gallery,
       imageQuality: 70,
@@ -195,7 +257,8 @@ class ChatController extends GetxController {
         imageUrl: url,
         createdAt: DateTime.now(),
       );
-      await _ds.sendMessage(msg);
+      await _ds.sendMessage(msg,
+          receiverId: otherUserId.isNotEmpty ? otherUserId : null);
     } catch (_) {
       Get.snackbar('Erro', 'Não foi possível enviar a imagem.',
           backgroundColor: Colors.red, colorText: Colors.white);

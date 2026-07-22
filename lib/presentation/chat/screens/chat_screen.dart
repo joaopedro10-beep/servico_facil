@@ -12,7 +12,10 @@ class ChatScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ctrl = Get.put(ChatController());
+    // CORREÇÃO GetX: controller vem do binding da rota (main.dart).
+    // Get.put dentro do build recriava o controller a cada rebuild,
+    // reiniciando streams e causando erros de lifecycle.
+    final ctrl = Get.find<ChatController>();
 
     return Scaffold(
       appBar: _buildAppBar(ctrl),
@@ -81,7 +84,15 @@ class ChatScreen extends StatelessWidget {
                   Text(ctrl.otherName,
                       style: const TextStyle(
                           fontSize: 15, fontWeight: FontWeight.w700)),
-                  if (ctrl.onlineStatus.isNotEmpty)
+                  if (ctrl.otherIsTyping.value)
+                    const Text('digitando…',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: AppColors.success,
+                          fontStyle: FontStyle.italic,
+                          fontWeight: FontWeight.normal,
+                        ))
+                  else if (ctrl.onlineStatus.isNotEmpty)
                     Text(ctrl.onlineStatus,
                         style: TextStyle(
                           fontSize: 11,
@@ -119,6 +130,7 @@ class ChatScreen extends StatelessWidget {
         ],
       ),
     );
+    }
   }
 
   // ── Lista de mensagens ────────────────────────────────────────────────────
@@ -161,7 +173,33 @@ class ChatScreen extends StatelessWidget {
   // ── Input ─────────────────────────────────────────────────────────────────
 
   Widget _buildInput(ChatController ctrl) {
-    return Container(
+    return Obx(() {
+      // Conversa encerrada automaticamente quando o serviço finaliza
+      if (ctrl.isConversationClosed.value) {
+        return Container(
+          color: Colors.white,
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+          child: SafeArea(
+            top: false,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.lock_outline_rounded,
+                    size: 16, color: AppColors.textHint),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    'Serviço finalizado — esta conversa foi encerrada.',
+                    style: TextStyle(
+                        fontSize: 12.5, color: AppColors.textSecondary),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      }
+      return Container(
       color: Colors.white,
       padding: const EdgeInsets.fromLTRB(8, 6, 8, 12),
       child: SafeArea(
@@ -219,7 +257,7 @@ class ChatScreen extends StatelessWidget {
         ),
       ),
     );
-  }
+  });
 }
 
 // ─── Bolha de mensagem ────────────────────────────────────────────────────────
