@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/constants/app_routes.dart';
 import '../../../core/errors/app_exceptions.dart';
+import '../../../core/services/geocoding_service.dart';
 import '../../../core/services/firebase_service.dart';
 import '../../../data/datasources/firestore_datasource.dart';
 import '../../../data/models/financial_record_model.dart';
@@ -53,6 +54,12 @@ class WorkerNavigationController extends GetxController {
   final workerLat = 0.0.obs;
   final workerLng = 0.0.obs;
   final hasWorkerPosition = false.obs;
+
+  // Destino (cliente): usa as coordenadas do pedido; se vierem zeradas
+  // (endereço sem geocodificação), resolve via GeocodingService.
+  final destLat = 0.0.obs;
+  final destLng = 0.0.obs;
+  bool _geocodeTried = false;
 
   // ── Cronômetro / ganhos ao vivo ───────────────────────────────────────────
   final elapsed = Duration.zero.obs;
@@ -109,6 +116,7 @@ class WorkerNavigationController extends GetxController {
       final firstLoad = order.value == null;
       order.value = o;
       if (o == null) return;
+      _resolveDestination(o);
       if (firstLoad || !pricingLoaded.value) _loadPricingAndClient(o);
     });
   }
@@ -204,19 +212,60 @@ class WorkerNavigationController extends GetxController {
     workerLat.value = pos.latitude;
     workerLng.value = pos.longitude;
     hasWorkerPosition.value = true;
+    _publishLiveLocation(pos);
   }
 
-  bool get hasDestination {
-    final a = order.value?.address;
-    return a != null && (a.lat != 0 || a.lng != 0);
+  /// Publica a posição do prestador NO PEDIDO (Firestore = única fonte de
+  /// verdade) para o cliente acompanhar o deslocamento em tempo real no
+  /// mapa. Disparado pelo stream de posição (a cada ~25 m), apenas
+  /// enquanto o atendimento está ativo.
+  DateTime _lastLocationPush = DateTime.fromMillisecondsSinceEpoch(0);
+  Future<void> _publishLiveLocation(Position pos) async {
+    final o = order.value;
+    if (o == null || !o.isOngoing) return;
+    // Throttle extra de 5 s para conter escritas
+    final now = DateTime.now();
+    if (now.difference(_lastLocationPush).inSeconds < 5) return;
+    _lastLocationPush = now;
+    try {
+      await _ds.updateWorkerLiveLocation(
+        o.id,
+        lat: pos.latitude,
+        lng: pos.longitude,
+        speedKmh: (pos.speed.isFinite && pos.speed > 0)
+            ? pos.speed * 3.6
+            : 0,
+      );
+    } catch (_) {
+      // Falha de rede/permissão não pode interromper o atendimento.
+    }
   }
+
+  /// Define o destino: coordenadas do pedido ou geocodificação do
+  /// endereço (motivo do "mapa não aparece": pedidos criados via CEP
+  /// vinham com lat/lng = 0).
+  Future<void> _resolveDestination(OrderModel o) async {
+    if (o.address.lat != 0 || o.address.lng != 0) {
+      destLat.value = o.address.lat;
+      destLng.value = o.address.lng;
+      return;
+    }
+    if (_geocodeTried || destLat.value != 0) return;
+    _geocodeTried = true;
+    final result = await GeocodingService.geocode(o.address.fullAddress);
+    if (result != null) {
+      destLat.value = result.$1;
+      destLng.value = result.$2;
+    }
+  }
+
+  bool get hasDestination => destLat.value != 0 || destLng.value != 0;
 
   /// Distância em km até o cliente (Haversine).
   double get distanceKm {
-    final o = order.value;
-    if (o == null || !hasWorkerPosition.value || !hasDestination) return 0;
+    if (!hasWorkerPosition.value || !hasDestination) return 0;
     return _haversineKm(
-        workerLat.value, workerLng.value, o.address.lat, o.address.lng);
+        workerLat.value, workerLng.value, destLat.value, destLng.value);
   }
 
   /// ETA estimado assumindo deslocamento urbano médio de 30 km/h.
@@ -242,21 +291,38 @@ class WorkerNavigationController extends GetxController {
   // Cronômetro (fonte de verdade: startedAt serverTimestamp)
   // ─────────────────────────────────────────────────────────────────────────
 
+  // Estimativa local usada APENAS enquanto o serverTimestamp de startedAt
+  // ainda não ecoou do servidor (no snapshot local ele chega como null por
+  // ~1s). Sem isso o cronômetro ficava travado em 00:00.
+  DateTime? _localStartEstimate;
+
   void _startTicker() {
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
       final o = order.value;
-      if (o == null ||
-          o.status != OrderStatus.inProgress ||
-          o.startedAt == null) {
-        if (elapsed.value != Duration.zero &&
-            o?.status != OrderStatus.inProgress) {
+      if (o == null || o.status != OrderStatus.inProgress) {
+        _localStartEstimate = null;
+        if (elapsed.value != Duration.zero) {
           elapsed.value = Duration.zero;
         }
         return;
       }
-      // Sempre recalculado a partir de startedAt — fechar e reabrir o app
-      // não afeta a contagem.
-      final diff = DateTime.now().difference(o.startedAt!);
+
+      // Fonte de verdade: startedAt (serverTimestamp) do Firestore.
+      // O Timer é só o "relógio de parede" que dispara o recálculo —
+      // a contagem em si é SEMPRE (agora − startedAt), então fechar e
+      // reabrir o app não afeta o cronômetro.
+      DateTime? start = o.startedAt;
+      if (start == null) {
+        // serverTimestamp pendente no cache local: estima com o horário
+        // do clique; o valor real substitui a estimativa no próximo
+        // snapshot vindo do servidor.
+        _localStartEstimate ??= DateTime.now();
+        start = _localStartEstimate;
+      } else {
+        _localStartEstimate = null;
+      }
+
+      final diff = DateTime.now().difference(start!);
       elapsed.value = diff.isNegative ? Duration.zero : diff;
     });
   }
@@ -462,20 +528,7 @@ class WorkerNavigationController extends GetxController {
   String get _digitsPhone =>
       clientPhone.value.replaceAll(RegExp(r'[^0-9]'), '');
 
-  Future<void> openWhatsApp() async {
-    final phone = _digitsPhone;
-    if (phone.isEmpty) {
-      Get.snackbar('Sem telefone',
-          'O cliente não cadastrou um número de telefone.',
-          snackPosition: SnackPosition.TOP);
-      return;
-    }
-    final intl = phone.startsWith('55') ? phone : '55$phone';
-    final uri = Uri.parse('https://wa.me/$intl');
-    try {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } catch (_) {}
-  }
+  // (WhatsApp removido — toda a comunicação acontece pelo chat interno)
 
   Future<void> callClient() async {
     final phone = _digitsPhone;
@@ -489,6 +542,63 @@ class WorkerNavigationController extends GetxController {
     try {
       await launchUrl(uri);
     } catch (_) {}
+  }
+
+  /// Recusa/devolve um atendimento JÁ ACEITO (antes de iniciar):
+  /// accepted → pending, workerId volta para '' (regras permitem) e o
+  /// cliente é avisado. Resolve o "não está recusando pedidos" para o
+  /// caso de pedidos aceitos.
+  Future<void> refuseAcceptedJob() async {
+    final o = order.value;
+    if (o == null || o.status != OrderStatus.accepted) return;
+
+    final confirm = await Get.dialog<bool>(
+      AlertDialog(
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18)),
+        title: const Text('Recusar este atendimento?'),
+        content: const Text(
+            'O pedido voltará para a fila e ficará disponível para '
+            'outros profissionais. O cliente será avisado.'),
+        actions: [
+          TextButton(
+              onPressed: () => Get.back(result: false),
+              child: const Text('Voltar')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFD32F2F)),
+            onPressed: () => Get.back(result: true),
+            child: const Text('Recusar',
+                style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+
+    isWorking.value = true;
+    try {
+      await _ds.refuseOrder(o.id);
+      await _ds.saveNotification(
+        targetUserId: o.userId,
+        title: 'Pedido de volta à fila',
+        body: 'O profissional não poderá realizar o serviço. '
+            'Estamos buscando outro para você.',
+        type: 'order_update',
+        targetId: o.id,
+      );
+      Get.offAllNamed(AppRoutes.workerHome);
+    } catch (e) {
+      final msg = e.toString().contains('permission-denied')
+          ? 'Permissão negada pelo Firestore — publique as regras v8.'
+          : 'Não foi possível recusar. Tente novamente.';
+      Get.snackbar('Erro', msg,
+          snackPosition: SnackPosition.TOP,
+          backgroundColor: const Color(0xFFD32F2F),
+          colorText: Colors.white);
+    } finally {
+      isWorking.value = false;
+    }
   }
 
   void openChat() {

@@ -22,7 +22,8 @@ class WorkerNavigationScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ctrl = Get.put(WorkerNavigationController());
+    // CORREÇÃO GetX: instância única via binding da rota (main.dart)
+    final ctrl = Get.find<WorkerNavigationController>();
     final money = NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$');
 
     return Scaffold(
@@ -41,8 +42,8 @@ class WorkerNavigationScreen extends StatelessWidget {
                 ? ServiceRouteMap(
                     workerLat: ctrl.workerLat.value,
                     workerLng: ctrl.workerLng.value,
-                    clientLat: o.address.lat,
-                    clientLng: o.address.lng,
+                    clientLat: ctrl.destLat.value,
+                    clientLng: ctrl.destLng.value,
                     hasWorkerPosition: ctrl.hasWorkerPosition.value,
                     accentColor: WTheme.primary,
                   )
@@ -61,6 +62,15 @@ class WorkerNavigationScreen extends StatelessWidget {
                   ),
                   const Spacer(),
                   _StatusChip(status: o.status),
+                  // Recusar/devolver o atendimento (só antes de iniciar)
+                  if (o.status == OrderStatus.accepted) ...[
+                    const SizedBox(width: 8),
+                    _RoundButton(
+                      icon: Icons.close_rounded,
+                      color: WTheme.red,
+                      onTap: () => ctrl.refuseAcceptedJob(),
+                    ),
+                  ],
                 ]),
               ),
 
@@ -258,11 +268,11 @@ class _BottomCard extends StatelessWidget {
                 ],
               ),
             ),
-            // WhatsApp
+            // Chat interno (estilo Uber — nunca abre WhatsApp)
             _RoundButton(
-              icon: Icons.chat_rounded,
-              color: const Color(0xFF25D366),
-              onTap: ctrl.openWhatsApp,
+              icon: Icons.forum_rounded,
+              color: WTheme.blue,
+              onTap: ctrl.openChat,
             ),
             const SizedBox(width: 8),
             // Ligação
