@@ -2,7 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:equatable/equatable.dart';
 import 'user_address.dart';
 
-enum OrderStatus { pending, accepted, inProgress, done, cancelled }
+enum OrderStatus { pending, accepted, arrived, inProgress, done, cancelled }
 
 class OrderModel extends Equatable {
   final String id;
@@ -20,9 +20,20 @@ class OrderModel extends Equatable {
 
   // Timestamps de cada etapa para a timeline
   final DateTime? acceptedAt;
+  final DateTime? arrivedAt;   // prestador chegou ao local
   final DateTime? startedAt;
   final DateTime? completedAt;
   final DateTime? cancelledAt;
+
+  // ── Financeiro (cobrança por hora) ─────────────────────────────────────────
+  // Snapshot congelado no início do serviço — se o admin alterar as taxas
+  // depois, este pedido continua com os valores acordados.
+  final double? hourlyRate;         // R$/hora da categoria
+  final double? platformFeePercent; // % de comissão da plataforma
+  final double? grossAmount;        // valor bruto final
+  final double? platformFeeAmount;  // comissão em R$
+  final double? netAmount;          // líquido do prestador
+  final int?    durationMinutes;    // duração total trabalhada
 
   // Nomes para exibição rápida (evita joins extras)
   final String? clientName;
@@ -42,9 +53,16 @@ class OrderModel extends Equatable {
     required this.createdAt,
     required this.updatedAt,
     this.acceptedAt,
+    this.arrivedAt,
     this.startedAt,
     this.completedAt,
     this.cancelledAt,
+    this.hourlyRate,
+    this.platformFeePercent,
+    this.grossAmount,
+    this.platformFeeAmount,
+    this.netAmount,
+    this.durationMinutes,
     this.clientName,
     this.workerName,
   });
@@ -67,9 +85,19 @@ class OrderModel extends Equatable {
       createdAt: (map['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       updatedAt: (map['updatedAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       acceptedAt: (map['acceptedAt'] as Timestamp?)?.toDate(),
+      arrivedAt: (map['arrivedAt'] as Timestamp?)?.toDate(),
       startedAt: (map['startedAt'] as Timestamp?)?.toDate(),
-      completedAt: (map['completedAt'] as Timestamp?)?.toDate(),
+      completedAt: ((map['finishedAt'] ?? map['completedAt']) as Timestamp?)
+          ?.toDate(),
       cancelledAt: (map['cancelledAt'] as Timestamp?)?.toDate(),
+      hourlyRate: (map['hourlyRate'] as num?)?.toDouble(),
+      platformFeePercent:
+          (map['platformFeePercent'] as num?)?.toDouble(),
+      grossAmount: (map['grossAmount'] as num?)?.toDouble(),
+      platformFeeAmount:
+          (map['platformFeeAmount'] as num?)?.toDouble(),
+      netAmount: (map['netAmount'] as num?)?.toDouble(),
+      durationMinutes: (map['durationMinutes'] as num?)?.toInt(),
       clientName: map['clientName'],
       workerName: map['workerName'],
     );
@@ -89,12 +117,22 @@ class OrderModel extends Equatable {
         'updatedAt': Timestamp.fromDate(updatedAt),
         if (acceptedAt != null)
           'acceptedAt': Timestamp.fromDate(acceptedAt!),
+        if (arrivedAt != null)
+          'arrivedAt': Timestamp.fromDate(arrivedAt!),
         if (startedAt != null)
           'startedAt': Timestamp.fromDate(startedAt!),
         if (completedAt != null)
           'completedAt': Timestamp.fromDate(completedAt!),
         if (cancelledAt != null)
           'cancelledAt': Timestamp.fromDate(cancelledAt!),
+        if (hourlyRate != null) 'hourlyRate': hourlyRate,
+        if (platformFeePercent != null)
+          'platformFeePercent': platformFeePercent,
+        if (grossAmount != null) 'grossAmount': grossAmount,
+        if (platformFeeAmount != null)
+          'platformFeeAmount': platformFeeAmount,
+        if (netAmount != null) 'netAmount': netAmount,
+        if (durationMinutes != null) 'durationMinutes': durationMinutes,
         if (clientName != null) 'clientName': clientName,
         if (workerName != null) 'workerName': workerName,
       };
@@ -107,10 +145,17 @@ class OrderModel extends Equatable {
     double? price,
     DateTime? updatedAt,
     DateTime? acceptedAt,
+    DateTime? arrivedAt,
     DateTime? startedAt,
     DateTime? completedAt,
     DateTime? cancelledAt,
     List<String>? photoUrls,
+    double? hourlyRate,
+    double? platformFeePercent,
+    double? grossAmount,
+    double? platformFeeAmount,
+    double? netAmount,
+    int? durationMinutes,
   }) {
     return OrderModel(
       id: id,
@@ -126,9 +171,16 @@ class OrderModel extends Equatable {
       createdAt: createdAt,
       updatedAt: updatedAt ?? DateTime.now(),
       acceptedAt: acceptedAt ?? this.acceptedAt,
+      arrivedAt: arrivedAt ?? this.arrivedAt,
       startedAt: startedAt ?? this.startedAt,
       completedAt: completedAt ?? this.completedAt,
       cancelledAt: cancelledAt ?? this.cancelledAt,
+      hourlyRate: hourlyRate ?? this.hourlyRate,
+      platformFeePercent: platformFeePercent ?? this.platformFeePercent,
+      grossAmount: grossAmount ?? this.grossAmount,
+      platformFeeAmount: platformFeeAmount ?? this.platformFeeAmount,
+      netAmount: netAmount ?? this.netAmount,
+      durationMinutes: durationMinutes ?? this.durationMinutes,
       clientName: clientName,
       workerName: workerName,
     );
@@ -137,11 +189,32 @@ class OrderModel extends Equatable {
   bool get isActive =>
       status == OrderStatus.pending ||
       status == OrderStatus.accepted ||
+      status == OrderStatus.arrived ||
       status == OrderStatus.inProgress;
+
+  /// Serviço em atendimento pelo prestador (fluxo estilo 99)
+  bool get isOngoing =>
+      status == OrderStatus.accepted ||
+      status == OrderStatus.arrived ||
+      status == OrderStatus.inProgress;
+
+  /// Etapa atual para a barra de progresso do cliente (0 a 4):
+  /// 0 aceito · 1 em deslocamento · 2 chegou · 3 em execução · 4 finalizado
+  int get progressStep {
+    switch (status) {
+      case OrderStatus.pending:    return -1;
+      case OrderStatus.accepted:   return 1; // aceito + em deslocamento
+      case OrderStatus.arrived:    return 2;
+      case OrderStatus.inProgress: return 3;
+      case OrderStatus.done:       return 4;
+      case OrderStatus.cancelled:  return -1;
+    }
+  }
 
   bool get canClientCancel => status == OrderStatus.pending;
   bool get canWorkerAccept => status == OrderStatus.pending;
-  bool get canWorkerStart => status == OrderStatus.accepted;
+  bool get canWorkerStart =>
+      status == OrderStatus.accepted || status == OrderStatus.arrived;
   bool get canWorkerComplete => status == OrderStatus.inProgress;
   bool get isScheduled => scheduledAt != null && scheduledAt!.isAfter(DateTime.now());
 
